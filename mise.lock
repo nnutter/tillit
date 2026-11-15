@@ -49,6 +49,47 @@ url = "https://github.com/betterleaks/betterleaks/releases/download/v1.10.1/bett
 url_api = "https://api.github.com/repos/betterleaks/betterleaks/releases/assets/740237680"
 provenance = "cosign"
 
+[[tools."github:nnutter/constable"]]
+version = "0.9.1"
+backend = "github:nnutter/constable"
+specifiers = ["latest"]
+
+[tools."github:nnutter/constable"."platforms.linux-arm64"]
+checksum = "sha256:94c45ce1c0f6444b9140e591f1fb3cb450120ede655f6f7c5f76e744e983edc3"
+url = "https://github.com/nnutter/constable/releases/download/v0.9.1/constable_v0.9.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/constable/releases/assets/745505473"
+provenance = "github-attestations"
+
+[tools."github:nnutter/constable"."platforms.linux-arm64-musl"]
+checksum = "sha256:94c45ce1c0f6444b9140e591f1fb3cb450120ede655f6f7c5f76e744e983edc3"
+url = "https://github.com/nnutter/constable/releases/download/v0.9.1/constable_v0.9.1_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/constable/releases/assets/745505473"
+provenance = "github-attestations"
+
+[tools."github:nnutter/constable"."platforms.linux-x64"]
+checksum = "sha256:c3aa624dcda47f7b4dfca6198d55f70706e3160a6e9aa50c971f712d5a5adc4b"
+url = "https://github.com/nnutter/constable/releases/download/v0.9.1/constable_v0.9.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/constable/releases/assets/745505477"
+provenance = "github-attestations"
+
+[tools."github:nnutter/constable"."platforms.linux-x64-musl"]
+checksum = "sha256:c3aa624dcda47f7b4dfca6198d55f70706e3160a6e9aa50c971f712d5a5adc4b"
+url = "https://github.com/nnutter/constable/releases/download/v0.9.1/constable_v0.9.1_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/constable/releases/assets/745505477"
+provenance = "github-attestations"
+
+[tools."github:nnutter/constable"."platforms.macos-arm64"]
+checksum = "sha256:2e4794282400dc8d8b04de3ae17507baa95886ba764ef3002ad38fc11e519585"
+url = "https://github.com/nnutter/constable/releases/download/v0.9.1/constable_v0.9.1_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/constable/releases/assets/745505475"
+provenance = "github-attestations"
+
+[tools."github:nnutter/constable"."platforms.macos-x64"]
+checksum = "sha256:6cbf259712964382f337dce27c3c0c25a65c0d46bbc3009c70d716dbd33c1c67"
+url = "https://github.com/nnutter/constable/releases/download/v0.9.1/constable_v0.9.1_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/constable/releases/assets/745505480"
+provenance = "github-attestations"
+
 [[tools."github:nnutter/mdlint"]]
 version = "0.4.4"
 backend = "github:nnutter/mdlint"
@@ -95,6 +136,189 @@ checksum = "sha256:cd7a45066c55997f9ad7fd51f2ec8f27e7d90f3fcf0f4a52091e20600ea10
 url = "https://github.com/nnutter/mdlint/releases/download/v0.4.4/mdlint-windows-x86_64.exe"
 url_api = "https://api.github.com/repos/nnutter/mdlint/releases/assets/696288485"
 provenance = "github-attestations"
+
+[[tools."github:nnutter/timber"]]
+version = "0.25.0"
+backend = "github:nnutter/timber"
+specifiers = ["latest"]
+
+[tools."github:nnutter/timber"."platforms.linux-arm64"]
+checksum = "sha256:76c4723d2ee4682674934cf37c6656b888926e3b033a791c5a5f0e55f471b24c"
+url = "https://github.com/nnutter/timber/releases/download/v0.25.0/timber_v0.25.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/timber/releases/assets/748861691"
+provenance = "github-attestations"
+
+[tools."github:nnutter/timber"."platforms.linux-arm64-musl"]
+checksum = "sha256:76c4723d2ee4682674934cf37c6656b888926e3b033a791c5a5f0e55f471b24c"
+url = "https://github.com/nnutter/timber/releases/download/v0.25.0/timber_v0.25.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/timber/releases/assets/748861691"
+provenance = "github-attestations"
+
+[tools."github:nnutter/timber"."platforms.linux-x64"]
+checksum = "sha256:4c1dcb026755f7821c1e1469ec9873cf8473bcf35de01bd705d738c7db2707cc"
+url = "https://github.com/nnutter/timber/releases/download/v0.25.0/timber_v0.25.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/timber/releases/assets/748861688"
+provenance = "github-attestations"
+
+[tools."github:nnutter/timber"."platforms.linux-x64-musl"]
+checksum = "sha256:4c1dcb026755f7821c1e1469ec9873cf8473bcf35de01bd705d738c7db2707cc"
+url = "https://github.com/nnutter/timber/releases/download/v0.25.0/timber_v0.25.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/timber/releases/assets/748861688"
+provenance = "github-attestations"
+
+[tools."github:nnutter/timber"."platforms.macos-arm64"]
+checksum = "sha256:db598a5d96e85c1bc8f8d15bf4b3c1349463df8b36817d46478a837ce8880686"
+url = "https://github.com/nnutter/timber/releases/download/v0.25.0/timber_v0.25.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/timber/releases/assets/748861690"
+provenance = "github-attestations"
+
+[tools."github:nnutter/timber"."platforms.macos-x64"]
+checksum = "sha256:7a769afddb2a99d28a7a38e973c863ff0376715bfebc47001cdaf05130949b2e"
+url = "https://github.com/nnutter/timber/releases/download/v0.25.0/timber_v0.25.0_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/nnutter/timber/releases/assets/748861693"
+provenance = "github-attestations"
+
+[[tools."github:securego/gosec"]]
+version = "2.30.0"
+backend = "github:securego/gosec"
+specifiers = ["latest"]
+
+[tools."github:securego/gosec"."platforms.linux-arm64"]
+checksum = "sha256:0867994920453070a5d6a713e35921a3058473e5c3bf777fdd5a2d6f95313fda"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613510"
+provenance = "github-attestations"
+
+[tools."github:securego/gosec"."platforms.linux-arm64-musl"]
+checksum = "sha256:0867994920453070a5d6a713e35921a3058473e5c3bf777fdd5a2d6f95313fda"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613510"
+provenance = "github-attestations"
+
+[tools."github:securego/gosec"."platforms.linux-x64"]
+checksum = "sha256:3fcce2c4e802ff4169217874602a7df355e9a37bcb6ffaa34b08f3d5f336cdfb"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613516"
+provenance = "github-attestations"
+
+[tools."github:securego/gosec"."platforms.linux-x64-musl"]
+checksum = "sha256:3fcce2c4e802ff4169217874602a7df355e9a37bcb6ffaa34b08f3d5f336cdfb"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613516"
+provenance = "github-attestations"
+
+[tools."github:securego/gosec"."platforms.macos-arm64"]
+checksum = "sha256:cac8c480673fc179798402b6d86efc12b6bcf11c18bcf377fda02cc55846dd97"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613518"
+provenance = "github-attestations"
+
+[tools."github:securego/gosec"."platforms.macos-x64"]
+checksum = "sha256:1b10b496954791f4b57448722f0cb93c0fa4aba24e9d286c0459dfde593e0898"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613520"
+provenance = "github-attestations"
+
+[tools."github:securego/gosec"."platforms.windows-x64"]
+checksum = "sha256:503bdfe6155584f2497ef855846b66406bce5b574ce1a9c7a7bb171aff2caa02"
+url = "https://github.com/securego/gosec/releases/download/v2.30.0/gosec_2.30.0_windows_amd64.tar.gz"
+url_api = "https://api.github.com/repos/securego/gosec/releases/assets/668613436"
+provenance = "github-attestations"
+
+[[tools.go]]
+version = "1.27.4"
+backend = "core:go"
+specifiers = ["latest"]
+
+[tools.go."platforms.linux-arm64"]
+checksum = "sha256:3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92"
+url = "https://dl.google.com/go/go1.27.4.linux-arm64.tar.gz"
+
+[tools.go."platforms.linux-arm64-musl"]
+checksum = "sha256:3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92"
+url = "https://dl.google.com/go/go1.27.4.linux-arm64.tar.gz"
+
+[tools.go."platforms.linux-x64"]
+checksum = "sha256:7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840"
+url = "https://dl.google.com/go/go1.27.4.linux-amd64.tar.gz"
+
+[tools.go."platforms.linux-x64-musl"]
+checksum = "sha256:7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840"
+url = "https://dl.google.com/go/go1.27.4.linux-amd64.tar.gz"
+
+[tools.go."platforms.macos-arm64"]
+checksum = "sha256:91a44a2b8a716600ad94a4f143e156116620db8828086a6e3602291be9bd0bb4"
+url = "https://dl.google.com/go/go1.27.4.darwin-arm64.tar.gz"
+
+[tools.go."platforms.macos-x64"]
+checksum = "sha256:2b799377704ef12db39bd254995d5c348c9cc8d86562ca817724390e56c38f43"
+url = "https://dl.google.com/go/go1.27.4.darwin-amd64.tar.gz"
+
+[tools.go."platforms.windows-x64"]
+checksum = "sha256:178ab98950ac69ab25069307dc6ade79f3816e414cce95b4da166a115cde1e7e"
+url = "https://dl.google.com/go/go1.27.4.windows-amd64.zip"
+
+[[tools."go:github.com/kojah/gohawk"]]
+version = "0.8.1"
+backend = "go:github.com/kojah/gohawk"
+specifiers = ["latest"]
+
+[[tools."go:golang.org/x/tools/cmd/goimports"]]
+version = "0.52.0"
+backend = "go:golang.org/x/tools/cmd/goimports"
+specifiers = ["latest"]
+
+[[tools."go:golang.org/x/vuln/cmd/govulncheck"]]
+version = "1.9.0"
+backend = "go:golang.org/x/vuln/cmd/govulncheck"
+specifiers = ["latest"]
+
+[[tools.gofumpt]]
+version = "0.12.0"
+backend = "aqua:mvdan/gofumpt"
+specifiers = ["latest"]
+
+[tools.gofumpt."platforms.linux-arm64"]
+checksum = "sha256:4322f081241ab0618356aa5921a8c110e4c7acfc17175cc15dc57b2f4a4b652d"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_linux_arm64"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473501"
+
+[tools.gofumpt."platforms.linux-arm64-musl"]
+checksum = "sha256:4322f081241ab0618356aa5921a8c110e4c7acfc17175cc15dc57b2f4a4b652d"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_linux_arm64"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473501"
+
+[tools.gofumpt."platforms.linux-x64"]
+checksum = "sha256:3bc4fcad497439918f5f56d4987de4709a99da0a355e6bec13a7278532b01d38"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_linux_amd64"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473521"
+
+[tools.gofumpt."platforms.linux-x64-musl"]
+checksum = "sha256:3bc4fcad497439918f5f56d4987de4709a99da0a355e6bec13a7278532b01d38"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_linux_amd64"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473521"
+
+[tools.gofumpt."platforms.macos-arm64"]
+checksum = "sha256:1a3e325b956ed12c21031d9e13382bd51a4fabb57de8d40428819b9583c3cfb9"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_darwin_arm64"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473536"
+
+[tools.gofumpt."platforms.macos-x64"]
+checksum = "sha256:1d3626892a321aca96a891696eaecb8f68e69e90582c2b55672d5ca210fd5fa8"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_darwin_amd64"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473545"
+
+[tools.gofumpt."platforms.windows-x64"]
+checksum = "sha256:66bd679908b64864fc85417e7ea01148774b477364b9a02ab1c194333a55c997"
+checksum_source = "mise-versions"
+url = "https://github.com/mvdan/gofumpt/releases/download/v0.12.0/gofumpt_v0.12.0_windows_amd64.exe"
+url_api = "https://api.github.com/repos/mvdan/gofumpt/releases/assets/549473475"
 
 [[tools.hk]]
 version = "2.12.0"
@@ -281,3 +505,190 @@ checksum = "sha256:9875af0d17d3535ed0e3903f3ae71fc8007268949328f73c2d12942fca118
 checksum_source = "mise-versions"
 url = "https://github.com/apple/pkl/releases/download/0.33.0/pkl-windows-amd64.exe"
 url_api = "https://api.github.com/repos/apple/pkl/releases/assets/714757051"
+
+[[tools."pypi:agentskills-tools"]]
+version = "0.8.0"
+backend = "pypi:agentskills-tools"
+specifiers = ["latest"]
+uv = { path = ".mise/locks/pypi-agentskills-tools/0.8.0", digest = "sha256:15184ef3462494e4d5eaf6a7674d1eb948620416537dee5e49d08f5da5570855" }
+
+[[tools.python]]
+version = "3.14.10"
+backend = "core:python"
+specifiers = ["3.14"]
+
+[tools.python."platforms.linux-arm64"]
+checksum = "sha256:38fd50f07170adc29d481913d1c30b17ecb538fbe290315fe1f83d84fdd5b694"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-aarch64-unknown-linux-gnu-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.linux-arm64-musl"]
+checksum = "sha256:75c04e5fa8105d95f8c84cca05a32b122d000dbbeb4cb4a81a1da5009636a42d"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-aarch64-unknown-linux-musl-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.linux-x64"]
+checksum = "sha256:c2ff2e97422f5d3896a16e0317fd212ba977bbf2688d93a6f7a03d817506bd30"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-x86_64-unknown-linux-gnu-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.linux-x64-musl"]
+checksum = "sha256:eff469445ef67410c1bea2370c9d3032dcacb639e9711c891d92b846a7dc5ec3"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-x86_64-unknown-linux-musl-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.macos-arm64"]
+checksum = "sha256:f15ec3d15460dd66c2eb88639b152cd9040e7d1ece11e38bf89e8f53f0171e02"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-aarch64-apple-darwin-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.macos-x64"]
+checksum = "sha256:85f8e54798e8e6aa58d2253f013d815c5616343cc0d15cbea882fca78bdfeae2"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-x86_64-apple-darwin-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[tools.python."platforms.windows-x64"]
+checksum = "sha256:32b6cf90a03e2bc15fda8d2ab7ff78c4870f138887d612932650ce764efaab8f"
+url = "https://github.com/astral-sh/python-build-standalone/releases/download/20261110/cpython-3.14.10+20261110-x86_64-pc-windows-msvc-install_only_stripped.tar.gz"
+provenance = "github-attestations"
+
+[[tools.staticcheck]]
+version = "2026.2.2"
+backend = "aqua:dominikh/go-tools/staticcheck"
+specifiers = ["latest"]
+
+[tools.staticcheck."platforms.linux-arm64"]
+checksum = "sha256:ccbdaaf81c37eb246a6063f811ee3b89e02ff042cb068cd1ca73a7377e2f7045"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633961454"
+
+[tools.staticcheck."platforms.linux-arm64-musl"]
+checksum = "sha256:ccbdaaf81c37eb246a6063f811ee3b89e02ff042cb068cd1ca73a7377e2f7045"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633961454"
+
+[tools.staticcheck."platforms.linux-x64"]
+checksum = "sha256:14c081e0f0d05b5a4d4c53fd3d357d4a5af9d20501465fefc9024ee828d3aa5c"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633961213"
+
+[tools.staticcheck."platforms.linux-x64-musl"]
+checksum = "sha256:14c081e0f0d05b5a4d4c53fd3d357d4a5af9d20501465fefc9024ee828d3aa5c"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_linux_amd64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633961213"
+
+[tools.staticcheck."platforms.macos-arm64"]
+checksum = "sha256:c054bf7f561f5668175d31ec8770f6104b89ccb41f0f0b4ce92d423c34365417"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633960392"
+
+[tools.staticcheck."platforms.macos-x64"]
+checksum = "sha256:400ce48d6069432c632cc32e2e54d63000f6037413024310fdc20c930f1df836"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_darwin_amd64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633960199"
+
+[tools.staticcheck."platforms.windows-x64"]
+checksum = "sha256:5f4f9491b41301e6a9d4de6f7542bd2efc1bfaf39e7cc52802d4db9e4a54e677"
+checksum_source = "mise-versions"
+url = "https://github.com/dominikh/go-tools/releases/download/2026.2.2/staticcheck_windows_amd64.tar.gz"
+url_api = "https://api.github.com/repos/dominikh/go-tools/releases/assets/633962362"
+
+[[tools.tombi]]
+version = "1.11.2"
+backend = "aqua:tombi-toml/tombi"
+specifiers = ["latest"]
+
+[tools.tombi."platforms.linux-arm64"]
+checksum = "sha256:14122e634113d2d9b1210b3f01d5139289575494a2d585824e1e51e116a58d96"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865789"
+provenance = "github-attestations"
+
+[tools.tombi."platforms.linux-arm64-musl"]
+checksum = "sha256:14122e634113d2d9b1210b3f01d5139289575494a2d585824e1e51e116a58d96"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865789"
+provenance = "github-attestations"
+
+[tools.tombi."platforms.linux-x64"]
+checksum = "sha256:8bb862497e99b415310ede463ee6cf997845368d3e6d4edac4dd33b07084beb3"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865894"
+provenance = "github-attestations"
+
+[tools.tombi."platforms.linux-x64-musl"]
+checksum = "sha256:8bb862497e99b415310ede463ee6cf997845368d3e6d4edac4dd33b07084beb3"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865894"
+provenance = "github-attestations"
+
+[tools.tombi."platforms.macos-arm64"]
+checksum = "sha256:035be0afc61549adbe9ce6b6ab582cfff99bcd6b86f38f847149c3819dc89d33"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865806"
+provenance = "github-attestations"
+
+[tools.tombi."platforms.macos-x64"]
+checksum = "sha256:09ed72a2e8a5a57fa325f95942833692bdc838b4ca4c0964dfbad20da44553c3"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865783"
+provenance = "github-attestations"
+
+[tools.tombi."platforms.windows-x64"]
+checksum = "sha256:fc059da801b0f6f6dd816eb4ede2a532d1562bc16c56cfe6557a9ecfa81a235a"
+url = "https://github.com/tombi-toml/tombi/releases/download/v1.11.2/tombi-cli-1.11.2-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/tombi-toml/tombi/releases/assets/731865844"
+provenance = "github-attestations"
+
+[[tools.yamlfmt]]
+version = "0.21.0"
+backend = "aqua:google/yamlfmt"
+specifiers = ["latest"]
+
+[tools.yamlfmt."platforms.linux-arm64"]
+checksum = "sha256:5b2689c963b177271330c5ce8ca7396751107e5a826be46f03d2cb9b6f0c7784"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650208"
+
+[tools.yamlfmt."platforms.linux-arm64-musl"]
+checksum = "sha256:5b2689c963b177271330c5ce8ca7396751107e5a826be46f03d2cb9b6f0c7784"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_arm64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650208"
+
+[tools.yamlfmt."platforms.linux-x64"]
+checksum = "sha256:1f300d9257b232bb3b541d7fb1b0e6b3c121bcbab381c86cd38cb8722be8a566"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650203"
+
+[tools.yamlfmt."platforms.linux-x64-musl"]
+checksum = "sha256:1f300d9257b232bb3b541d7fb1b0e6b3c121bcbab381c86cd38cb8722be8a566"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Linux_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650203"
+
+[tools.yamlfmt."platforms.macos-arm64"]
+checksum = "sha256:4b417ecb94339d57e4c122ecc948c1a00fe328b5853266de9806e652a92858fa"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Darwin_arm64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650209"
+
+[tools.yamlfmt."platforms.macos-x64"]
+checksum = "sha256:060e943bcb8583c456810eb1ff4721b4f46c4a0c1a4432449d5dc3bbfe29a22b"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Darwin_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650207"
+
+[tools.yamlfmt."platforms.windows-x64"]
+checksum = "sha256:07f80ce5d741eb4b0a9380ac78a19c7cb5bd44e2a9a47a5a04839e3ba54dd463"
+checksum_source = "mise-versions"
+url = "https://github.com/google/yamlfmt/releases/download/v0.21.0/yamlfmt_0.21.0_Windows_x86_64.tar.gz"
+url_api = "https://api.github.com/repos/google/yamlfmt/releases/assets/336650206"

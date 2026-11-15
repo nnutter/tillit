@@ -13,4 +13,4 @@ fail_fast = false
 
 exclude = List(".mise/locks")
 
-hooks = Hooks.all(List("ts-backend"))
+hooks = Hooks.all(List("go", "toml", "ts-backend", "yaml"))

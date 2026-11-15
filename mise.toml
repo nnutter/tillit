@@ -1,18 +1,49 @@
 [tools]
-betterleaks = "latest"
+"github:nnutter/constable" = "latest"
 "github:nnutter/mdlint" = "latest"
+"github:nnutter/timber" = "latest"
+"github:securego/gosec" = "latest"
+"go:github.com/kojah/gohawk" = "latest"
+"go:golang.org/x/tools/cmd/goimports" = "latest"
+"go:golang.org/x/vuln/cmd/govulncheck" = "latest"
+"pypi:agentskills-tools" = "latest"
+betterleaks = "latest"
+go = "latest"
+gofumpt = "latest"
 hk = "2.12.0"
 jactionlint = "latest"
+pkl = "latest"
+python = "3.14"
+staticcheck = "latest"
+tombi = "latest"
+yamlfmt = "latest"
 node = "24"
 "npm:oxfmt" = "latest"
 "npm:oxlint" = "latest"
 "npm:pele" = "1.13.0"
 "npm:typescript" = "latest"
-pkl = "latest"
+
+[env]
+# Test and build temporaries stay out of ./... because the Go tool
+# ignores directories whose names start with a dot.
+# Go requires this directory to exist, and a fresh checkout does not have it.
+GOTMPDIR = "{{ exec(command='mkdir -p ' ~ ((config_root ~ '/.tmp') | quote) ~ ' && printf %s ' ~ ((config_root ~ '/.tmp') | quote)) }}"
+
+[tasks.all]
+description = "Run fix, test, and check"
+run = [{ task = "fix" }, { task = "test" }, { task = "check" }]
 
 [tasks.check]
 description = "Check all files without writing fixes"
 run = "hk check --all"
+
+[tasks.ci-test]
+description = "Run tests with the race detector and shuffled order"
+run = "go test -race -shuffle=on ./..."
+
+[tasks.coverage]
+description = "Run tests and generate coverage report"
+run = "go test -coverprofile=coverage.out -covermode=atomic ./... && go tool cover -func=coverage.out"
 
 [tasks.diagrams]
 description = "Build the README diagram SVGs with Pele"
@@ -30,3 +61,37 @@ else
   hk fix ${usage_staged_files}
 fi
 '''
+
+[tasks.on-start]
+description = "Pi mise-hooks: run fixes, tests, and checks before agent starts"
+run = [{ task = "all" }]
+
+[tasks.on-stop]
+description = "Pi mise-hooks: fix edited files, then test and check"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+mise run fix "$@"
+mise run test
+mise run check
+'''
+
+[tasks.setup]
+description = "Install hk git hooks"
+run = "hk install --mise"
+
+[tasks.test]
+description = "Run tests with coverage"
+run = "go test -cover ./..."
+
+[tasks.upgrade]
+description = "Upgrade the tools to their newest releases"
+run = [
+  "mise upgrade --local",
+  # First-party tools can leave the release-age queue immediately.
+  "mise upgrade --minimum-release-age 0 github:nnutter/constable@latest",
+  "mise upgrade --minimum-release-age 0 github:nnutter/mdlint@latest",
+  "mise lock --minimum-release-age 0 github:nnutter/constable@latest",
+  "mise lock --minimum-release-age 0 github:nnutter/mdlint@latest",
+  "mise lock",
+]
