@@ -31,10 +31,16 @@ type Config struct {
 	Command []string
 	Mode    Mode
 	Auditor Auditor
+	Mender  Auditor
 }
 
 type document struct {
 	Auditor *auditorDocument `json:"auditor,omitempty"`
+	Mender  *menderDocument  `json:"mender,omitempty"`
+}
+
+type menderDocument struct {
+	Conflict *fixupDocument `json:"conflict,omitempty"`
 }
 
 type verifyDocument struct {
@@ -61,7 +67,7 @@ type fixupModel struct {
 // Load reads the global, repository, and worktree config files.
 // A later file replaces only the fields it sets. The mode defaults to change.
 func Load(gitDir string) (Config, error) {
-	cfg := Config{Mode: ModeChange, Auditor: Auditor{Thinking: ThinkingLow}}
+	cfg := Config{Mode: ModeChange, Auditor: Auditor{Thinking: ThinkingLow}, Mender: Auditor{Thinking: ThinkingLow}}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Config{}, err
@@ -105,6 +111,9 @@ func apply(cfg Config, path string) (Config, error) {
 	if err := applyAuditor(&cfg, doc); err != nil {
 		return Config{}, err
 	}
+	if err := applyModel(&cfg.Mender, menderModel(doc)); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
 }
 
@@ -128,15 +137,18 @@ func applyVerify(cfg *Config, doc document) error {
 }
 
 func applyAuditor(cfg *Config, doc document) error {
-	model := docFixupModel(doc)
+	return applyModel(&cfg.Auditor, docFixupModel(doc))
+}
+
+func applyModel(target *Auditor, model *fixupModel) error {
 	if model == nil {
 		return nil
 	}
 	if model.Provider != "" {
-		cfg.Auditor.Provider = model.Provider
+		target.Provider = model.Provider
 	}
 	if model.Version != "" {
-		cfg.Auditor.Model = model.Version
+		target.Model = model.Version
 	}
 	if model.Effort == "" {
 		return nil
@@ -145,7 +157,7 @@ func applyAuditor(cfg *Config, doc document) error {
 	if err != nil {
 		return err
 	}
-	cfg.Auditor.Thinking = thinking
+	target.Thinking = thinking
 	return nil
 }
 

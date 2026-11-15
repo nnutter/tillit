@@ -34,6 +34,9 @@ func Show(gitDir string, scope Scope) (string, error) {
 
 // Get prints one value. A list is one element per line.
 func Get(gitDir string, scope Scope, key string) (string, error) {
+	if strings.HasPrefix(key, "mender.conflict.model.") {
+		return getMender(gitDir, scope, key)
+	}
 	if _, err := kindOf(key); err != nil {
 		return "", err
 	}
@@ -47,6 +50,9 @@ func Get(gitDir string, scope Scope, key string) (string, error) {
 // Set writes a value into one config file.
 // A list value replaces the whole list.
 func Set(gitDir string, scope Scope, key string, values []string) error {
+	if strings.HasPrefix(key, "mender.conflict.model.") {
+		return setMender(gitDir, scope, key, values)
+	}
 	kind, err := kindOf(key)
 	if err != nil {
 		return err
@@ -78,6 +84,9 @@ func Append(gitDir string, scope Scope, key, value string) error {
 
 // Remove deletes a key, or one matching list element when hasValue is set.
 func Remove(gitDir string, scope Scope, key, value string, hasValue bool) error {
+	if strings.HasPrefix(key, "mender.conflict.model.") {
+		return removeMender(gitDir, scope, key, hasValue)
+	}
 	kind, err := kindOf(key)
 	if err != nil {
 		return err
@@ -169,7 +178,21 @@ func effectiveDocument(cfg Config) document {
 	if fixupModelIsSet(model) {
 		fixup = &fixupDocument{Model: model}
 	}
-	return document{Auditor: &auditorDocument{Verify: verify, Fixup: fixup}}
+	mender := &fixupModel{Provider: cfg.Mender.Provider, Version: cfg.Mender.Model}
+	if cfg.Mender.Thinking != nil {
+		mender.Effort = cfg.Mender.Thinking.String()
+	}
+	return document{Auditor: &auditorDocument{Verify: verify, Fixup: fixup}, Mender: &menderDocument{Conflict: &fixupDocument{Model: mender}}}
+}
+
+func menderModel(doc document) *fixupModel {
+	if doc.Mender == nil {
+		return nil
+	}
+	if doc.Mender.Conflict == nil {
+		return nil
+	}
+	return doc.Mender.Conflict.Model
 }
 
 func readScope(gitDir string, scope Scope) (document, error) {
@@ -602,4 +625,93 @@ func kindName(kind valueKind) string {
 	default:
 		return ""
 	}
+}
+
+func getMender(gitDir string, scope Scope, key string) (string, error) {
+	doc, err := documentFor(gitDir, scope)
+	if err != nil {
+		return "", err
+	}
+	model := menderModel(doc)
+	if model == nil {
+		return "", unset(key)
+	}
+	var value string
+	switch key {
+	case "mender.conflict.model.provider":
+		value = model.Provider
+	case "mender.conflict.model.version":
+		value = model.Version
+	case "mender.conflict.model.effort":
+		value = model.Effort
+	default:
+		return "", fmt.Errorf("unknown config key %q", key)
+	}
+	if value == "" {
+		return "", unset(key)
+	}
+	return value + "\n", nil
+}
+
+func setMender(gitDir string, scope Scope, key string, values []string) error {
+	if len(values) != 1 {
+		return fmt.Errorf("%s accepts one value", key)
+	}
+	return update(gitDir, scope, func(doc *document) error {
+		if doc.Mender == nil {
+			doc.Mender = new(menderDocument)
+		}
+		if doc.Mender.Conflict == nil {
+			doc.Mender.Conflict = new(fixupDocument)
+		}
+		if doc.Mender.Conflict.Model == nil {
+			doc.Mender.Conflict.Model = new(fixupModel)
+		}
+		model := doc.Mender.Conflict.Model
+		switch key {
+		case "mender.conflict.model.provider":
+			model.Provider = values[0]
+		case "mender.conflict.model.version":
+			model.Version = values[0]
+		case "mender.conflict.model.effort":
+			if _, err := ParseThinking(values[0]); err != nil {
+				return err
+			}
+			model.Effort = values[0]
+		default:
+			return fmt.Errorf("unknown config key %q", key)
+		}
+		return nil
+	})
+}
+
+func removeMender(gitDir string, scope Scope, key string, hasValue bool) error {
+	if hasValue {
+		return fmt.Errorf("%s is not a list", key)
+	}
+	return update(gitDir, scope, func(doc *document) error {
+		model := menderModel(*doc)
+		if model == nil {
+			return unset(key)
+		}
+		var field *string
+		switch key {
+		case "mender.conflict.model.provider":
+			field = &model.Provider
+		case "mender.conflict.model.version":
+			field = &model.Version
+		case "mender.conflict.model.effort":
+			field = &model.Effort
+		default:
+			return fmt.Errorf("unknown config key %q", key)
+		}
+		if *field == "" {
+			return unset(key)
+		}
+		*field = ""
+		if fixupModelIsEmpty(model) {
+			doc.Mender = nil
+		}
+		return nil
+	})
 }

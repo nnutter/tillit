@@ -15,7 +15,7 @@ func TestShowPrintsTheMergedSettings(t *testing.T) {
 
 	text, err := config.Show(gitDir, config.ScopeEffective)
 	require.NoError(t, err)
-	require.JSONEq(t, `{"auditor":{"fixup":{"model":{"effort":"low"}},"verify":{"mode":"change"}}}`, text)
+	require.JSONEq(t, `{"auditor":{"fixup":{"model":{"effort":"low"}},"verify":{"mode":"change"}},"mender":{"conflict":{"model":{"effort":"low"}}}}`, text)
 	require.Contains(t, text, "\n      \"mode\": \"change\"\n")
 
 	mode, err := config.Get(gitDir, config.ScopeEffective, "auditor.verify.mode")
