@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/spor/internal/daemon"
+	"github.com/nnutter/spor/internal/repository"
 	"github.com/nnutter/spor/internal/smith"
 )
 
@@ -32,6 +33,33 @@ func TestProcessPendingAdd(t *testing.T) {
 	ok, err = daemon.ProcessPending(t.Context(), dir)
 	require.NoError(t, err)
 	require.False(t, ok)
+}
+
+func TestBusyWriterKeepsRequestPendingAndRejectsReset(t *testing.T) {
+	dir := newRepo(t)
+	lock, err := repository.AcquireWriter(dir)
+	require.NoError(t, err)
+	require.NoError(t, daemon.EnqueueAdd(t.Context(), dir))
+	processed, err := daemon.ProcessPending(t.Context(), dir)
+	require.NoError(t, err)
+	require.False(t, processed)
+	_, err = smith.Reset(t.Context(), dir)
+	require.ErrorIs(t, err, repository.ErrWriterBusy)
+	repository.ReleaseWriter(lock)
+	processed, err = daemon.ProcessPending(t.Context(), dir)
+	require.NoError(t, err)
+	require.True(t, processed)
+}
+
+func TestRebaseFailureIsVisible(t *testing.T) {
+	dir := newRepo(t)
+	require.NoError(t, daemon.EnqueueRebase(t.Context(), dir))
+	processed, err := daemon.ProcessPending(t.Context(), dir)
+	require.True(t, processed)
+	require.ErrorContains(t, err, "clean worktree")
+	outcome, err := daemon.RebaseOutcome(t.Context(), dir)
+	require.NoError(t, err)
+	require.Contains(t, outcome, "clean worktree")
 }
 
 func TestEnqueueVerifyRejectsUnknownMode(t *testing.T) {

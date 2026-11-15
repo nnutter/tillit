@@ -204,6 +204,31 @@ func TestLogShowsNewestFirstWithUnverified(t *testing.T) {
 	require.Greater(t, rename, remainder)
 }
 
+func TestStatusReportsQueuedAddFailure(t *testing.T) {
+	dir := repoWithStagedRename(t)
+	writeConfig(t, dir, []string{"spor-command-that-does-not-exist"}, "")
+	require.Contains(t, execute(t, dir, "add"), "Queued")
+	processed, err := daemon.ProcessPending(t.Context(), dir)
+	require.True(t, processed)
+	require.Error(t, err)
+	status := execute(t, dir, "status")
+	require.Contains(t, status, "add: Error:")
+	require.Contains(t, status, "spor-command-that-does-not-exist")
+	writeConfig(t, dir, []string{"true"}, "")
+	require.Contains(t, execute(t, dir, "verify"), "Queued")
+	drain(t, dir)
+	status = execute(t, dir, "status")
+	require.Contains(t, status, "add: Error:")
+	require.Contains(t, status, "spor-command-that-does-not-exist")
+}
+
+func TestRebaseReportsQueuedOutcome(t *testing.T) {
+	dir := cleanRepo(t)
+	require.Contains(t, execute(t, dir, "rebase"), "Queued")
+	drain(t, dir)
+	require.Contains(t, execute(t, dir, "status"), "No verified commits to integrate")
+}
+
 func TestLogWithNoCommits(t *testing.T) {
 	require.Equal(t, "No commits to show.\n", execute(t, cleanRepo(t), "log"))
 }

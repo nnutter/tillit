@@ -19,10 +19,11 @@ type storedCommit struct {
 }
 
 type submission struct {
-	id      string
-	ref     string
-	outcome string
-	commits []storedCommit
+	id       string
+	ref      string
+	outcome  string
+	commits  []storedCommit
+	previous string
 }
 
 func recordSubmission(ctx context.Context, gitDir string, item submission) error {
@@ -35,14 +36,23 @@ func recordSubmission(ctx context.Context, gitDir string, item submission) error
 	if err != nil {
 		return err
 	}
-	_, err = db.ExecContext(ctx, `
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	_, err = tx.ExecContext(ctx, `
 		INSERT INTO submission (id, created, ref, outcome, commits)
 		VALUES (?, ?, ?, ?, ?)
 	`, item.id, time.Now().UTC().Format(time.RFC3339Nano), item.ref, item.outcome, string(body))
 	if err != nil {
 		return fmt.Errorf("record submission: %w", err)
 	}
-	return nil
+	_, err = tx.ExecContext(ctx, `INSERT INTO submission_previous (id, tip) VALUES (?, ?)`, item.id, item.previous)
+	if err != nil {
+		return fmt.Errorf("record previous Spor tip: %w", err)
+	}
+	return tx.Commit()
 }
 
 func latestSubmission(ctx context.Context, gitDir string) (submission, bool, error) {
@@ -153,5 +163,13 @@ func createSubmissionTable(ctx context.Context, db *sql.DB) error {
 			commits TEXT NOT NULL
 		)
 	`)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS submission_previous (id TEXT PRIMARY KEY, tip TEXT NOT NULL)`)
+	if err != nil {
+		return err
+	}
+	_, err = db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS mender_retired_submission (id TEXT PRIMARY KEY)`)
 	return err
 }

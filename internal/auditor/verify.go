@@ -40,6 +40,9 @@ func Verify(ctx context.Context, repoPath string, mode config.Mode) (Result, err
 		return Result{}, err
 	}
 	defer func() { _ = repo.Close() }()
+	if err := repository.EnsureNoPendingIntegration(gitDir); err != nil {
+		return Result{}, err
+	}
 	if len(cfg.Command) == 0 {
 		return Result{}, ErrCommandNotConfigured
 	}

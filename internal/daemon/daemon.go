@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/config"
+	"github.com/nnutter/spor/internal/mender"
 	"github.com/nnutter/spor/internal/repository"
 	"github.com/nnutter/spor/internal/smith"
 
@@ -36,16 +38,22 @@ type kindVerify struct{}
 
 func (kindVerify) sealedKind() {}
 
+type kindRebase struct{}
+
+func (kindRebase) sealedKind() {}
+
 // Kinds in dispatch order.
 var (
 	KindAdd    Kind = kindAdd{}
 	KindVerify Kind = kindVerify{}
+	KindRebase Kind = kindRebase{}
 )
 
 type request struct {
-	id   string
-	kind Kind
-	mode string
+	id     string
+	kind   Kind
+	mode   string
+	branch string
 }
 
 // EnqueueAdd records one add request for the daemon.
@@ -80,9 +88,44 @@ func enqueue(ctx context.Context, repoPath string, kind Kind, mode string) error
 	return nil
 }
 
+// EnqueueRebase records the current branch as the target of integration.
+func EnqueueRebase(ctx context.Context, repoPath string) error {
+	repo, gitDir, err := repository.Open(repoPath)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = repo.Close() }()
+	head, err := repo.Storer.Reference("HEAD")
+	if err != nil {
+		return err
+	}
+	branch := head.Target().String()
+	if branch == "" {
+		return fmt.Errorf("rebase requires an attached branch")
+	}
+	db, err := openState(ctx, gitDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	_, err = db.ExecContext(ctx, `INSERT INTO request (id, created, kind, mode, done, branch) VALUES (?, ?, ?, '', 0, ?)`, newID(), time.Now().UTC().Format(time.RFC3339Nano), "rebase", branch)
+	if err != nil {
+		return fmt.Errorf("enqueue rebase: %w", err)
+	}
+	return nil
+}
+
 // ProcessPending runs the oldest queued request once.
 // It reports whether it ran one. A request that errors is still marked done.
 func ProcessPending(ctx context.Context, repoPath string) (bool, error) {
+	lock, err := repository.AcquireWriter(repoPath)
+	if errors.Is(err, repository.ErrWriterBusy) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer repository.ReleaseWriter(lock)
 	_, gitDir, err := repository.Open(repoPath)
 	if err != nil {
 		return false, err
@@ -94,8 +137,17 @@ func ProcessPending(ctx context.Context, repoPath string) (bool, error) {
 	if !ok {
 		return false, nil
 	}
-	dispatchErr := dispatch(ctx, repoPath, item)
-	markErr := markDone(ctx, gitDir, item.id)
+	var result string
+	var dispatchErr error
+	if _, ok := item.kind.(kindRebase); ok {
+		result, dispatchErr = mender.Rebase(ctx, repoPath, item.branch)
+	} else {
+		dispatchErr = dispatch(ctx, repoPath, item)
+	}
+	if dispatchErr != nil {
+		result = "Error: " + dispatchErr.Error()
+	}
+	markErr := markDone(ctx, gitDir, item.id, result)
 	if markErr != nil {
 		return true, markErr
 	}
@@ -106,6 +158,9 @@ func dispatch(ctx context.Context, repoPath string, item request) error {
 	switch item.kind.(type) {
 	case kindAdd:
 		return dispatchAdd(ctx, repoPath)
+	case kindRebase:
+		_, err := mender.Rebase(ctx, repoPath, item.branch)
+		return err
 	case kindVerify:
 		_, err := auditor.Verify(ctx, repoPath, config.Mode(item.mode))
 		if errors.Is(err, auditor.ErrCommandNotConfigured) {
@@ -134,10 +189,10 @@ func oldestPending(ctx context.Context, gitDir string) (request, bool, error) {
 		return request{}, false, err
 	}
 	defer func() { _ = db.Close() }()
-	row := db.QueryRowContext(ctx, `SELECT id, kind, mode FROM request WHERE done = 0 ORDER BY created ASC, rowid ASC LIMIT 1`)
+	row := db.QueryRowContext(ctx, `SELECT id, kind, mode, branch FROM request WHERE done = 0 ORDER BY created ASC, rowid ASC LIMIT 1`)
 	var item request
 	var kind, mode string
-	err = row.Scan(&item.id, &kind, &mode)
+	err = row.Scan(&item.id, &kind, &mode, &item.branch)
 	if errors.Is(err, sql.ErrNoRows) {
 		return request{}, false, nil
 	}
@@ -152,13 +207,13 @@ func oldestPending(ctx context.Context, gitDir string) (request, bool, error) {
 	return item, true, nil
 }
 
-func markDone(ctx context.Context, gitDir, id string) error {
+func markDone(ctx context.Context, gitDir, id, result string) error {
 	db, err := openState(ctx, gitDir)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = db.Close() }()
-	_, err = db.ExecContext(ctx, `UPDATE request SET done = 1 WHERE id = ?`, id)
+	_, err = db.ExecContext(ctx, `UPDATE request SET done = 1, result = ? WHERE id = ?`, result, id)
 	if err != nil {
 		return fmt.Errorf("mark request done: %w", err)
 	}
@@ -195,7 +250,99 @@ func createRequestTable(ctx context.Context, db *sql.DB) error {
 			done INTEGER NOT NULL
 		)
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(request)`)
+	if err != nil {
+		return err
+	}
+	columns := make(map[string]bool)
+	for rows.Next() {
+		var cid, notNull, pk int
+		var name, typ string
+		var defaultValue any
+		if err := rows.Scan(&cid, &name, &typ, &notNull, &defaultValue, &pk); err != nil {
+			_ = rows.Close()
+			return err
+		}
+		columns[name] = true
+	}
+	if err := rows.Err(); err != nil {
+		_ = rows.Close()
+		return err
+	}
+	if err := rows.Close(); err != nil {
+		return err
+	}
+	for _, name := range []string{"branch", "result"} {
+		if !columns[name] {
+			if _, err := db.ExecContext(ctx, `ALTER TABLE request ADD COLUMN `+name+` TEXT NOT NULL DEFAULT ''`); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// WorkError reports the latest completed add or verify failure, if any.
+func WorkError(ctx context.Context, repoPath string) (string, error) {
+	repo, gitDir, err := repository.Open(repoPath)
+	if err != nil {
+		return "", err
+	}
+	_ = repo.Close()
+	db, err := openState(ctx, gitDir)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = db.Close() }()
+	var failures []string
+	for _, kind := range []string{"add", "verify"} {
+		failure, err := latestWorkError(ctx, db, kind)
+		if err != nil {
+			return "", err
+		}
+		if failure != "" {
+			failures = append(failures, kind+": "+failure)
+		}
+	}
+	return strings.Join(failures, "\n"), nil
+}
+
+func latestWorkError(ctx context.Context, db *sql.DB, kind string) (string, error) {
+	var result string
+	err := db.QueryRowContext(ctx, `SELECT result FROM request WHERE kind = ? AND done = 1 ORDER BY created DESC, rowid DESC LIMIT 1`, kind).Scan(&result)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !strings.HasPrefix(result, "Error: ") {
+		return "", nil
+	}
+	return result, nil
+}
+
+// RebaseOutcome reports the most recently completed rebase request.
+func RebaseOutcome(ctx context.Context, repoPath string) (string, error) {
+	repo, gitDir, err := repository.Open(repoPath)
+	if err != nil {
+		return "", err
+	}
+	_ = repo.Close()
+	db, err := openState(ctx, gitDir)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = db.Close() }()
+	var result string
+	err = db.QueryRowContext(ctx, `SELECT result FROM request WHERE kind = 'rebase' AND done = 1 ORDER BY created DESC, rowid DESC LIMIT 1`).Scan(&result)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return result, err
 }
 
 func newID() string {
@@ -208,6 +355,8 @@ func kindName(kind Kind) string {
 		return "add"
 	case kindVerify:
 		return "verify"
+	case kindRebase:
+		return "rebase"
 	default:
 		return ""
 	}
@@ -219,6 +368,8 @@ func parseKind(value string) (Kind, error) {
 		return KindAdd, nil
 	case "verify":
 		return KindVerify, nil
+	case "rebase":
+		return KindRebase, nil
 	default:
 		return nil, fmt.Errorf("unknown request kind %q", value)
 	}

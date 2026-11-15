@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nnutter/spor/internal/auditor"
+	"github.com/nnutter/spor/internal/daemon"
 	"github.com/nnutter/spor/internal/smith"
 )
 
@@ -32,6 +33,20 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	_, err = fmt.Fprint(cmd.OutOrStdout(), smith.Format(result)+report)
+	outcome, err := daemon.RebaseOutcome(cmd.Context(), repo)
+	if err != nil {
+		return err
+	}
+	if outcome != "" {
+		outcome = "rebase: " + outcome + "\n"
+	}
+	workError, err := daemon.WorkError(cmd.Context(), repo)
+	if err != nil {
+		return err
+	}
+	if workError != "" {
+		workError += "\n"
+	}
+	_, err = fmt.Fprint(cmd.OutOrStdout(), smith.Format(result)+report+outcome+workError)
 	return err
 }

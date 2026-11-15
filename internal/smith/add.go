@@ -48,6 +48,9 @@ func Add(ctx context.Context, repoPath string) (Result, error) {
 		return Result{}, err
 	}
 	defer func() { _ = repo.Close() }()
+	if err := repository.EnsureNoPendingIntegration(gitDir); err != nil {
+		return Result{}, err
+	}
 	return addRepo(ctx, repo, gitDir)
 }
 
@@ -63,13 +66,16 @@ func addRepo(ctx context.Context, repo *git.Repository, gitDir string) (Result, 
 	if len(changedPaths(headFiles, indexFiles)) == 0 {
 		return Result{Message: noStagedChanges}, nil
 	}
+	if err := rejectPendingTail(repo, gitDir); err != nil {
+		return Result{}, err
+	}
 	plans, err := planChanges(repo.Storer, headFiles, indexFiles)
 	if err != nil {
 		return Result{}, err
 	}
 	ref := repository.HeadRef(gitDir)
 	if len(plans) == 0 {
-		return recordNone(ctx, gitDir, ref)
+		return recordNone(ctx, repo, gitDir, ref)
 	}
 	return commitAdd(ctx, repo, gitDir, head.Hash(), headFiles, indexFiles, plans, ref)
 }
@@ -80,6 +86,10 @@ func commitAdd(ctx context.Context, repo *git.Repository, gitDir string, head pl
 		return Result{}, err
 	}
 	sporID := newSporID()
+	previous, err := previousTip(repo, ref)
+	if err != nil {
+		return Result{}, err
+	}
 	made, tip, err := applyPlans(repo.Storer, who, head, headFiles, indexFiles, plans, sporID, time.Now())
 	if err != nil {
 		return Result{}, err
@@ -88,20 +98,69 @@ func commitAdd(ctx context.Context, repo *git.Repository, gitDir string, head pl
 		return Result{}, err
 	}
 	commits := toCommits(made)
-	item := submission{id: sporID, ref: ref, outcome: outcomeCommits, commits: toStored(commits)}
+	item := submission{id: sporID, ref: ref, outcome: outcomeCommits, commits: toStored(commits), previous: previous}
 	if err := recordSubmission(ctx, gitDir, item); err != nil {
 		return Result{}, err
 	}
 	return Result{SporID: sporID, Ref: ref, Commits: commits}, nil
 }
 
-func recordNone(ctx context.Context, gitDir, ref string) (Result, error) {
+func recordNone(ctx context.Context, repo *git.Repository, gitDir, ref string) (Result, error) {
 	sporID := newSporID()
-	item := submission{id: sporID, ref: ref, outcome: outcomeNone, commits: []storedCommit{}}
+	previous, err := previousTip(repo, ref)
+	if err != nil {
+		return Result{}, err
+	}
+	item := submission{id: sporID, ref: ref, outcome: outcomeNone, commits: []storedCommit{}, previous: previous}
 	if err := recordSubmission(ctx, gitDir, item); err != nil {
 		return Result{}, err
 	}
 	return Result{SporID: sporID, Message: noRefactors}, nil
+}
+
+func rejectPendingTail(repo *git.Repository, gitDir string) error {
+	boundary, err := repository.Boundary(gitDir)
+	if err != nil {
+		return err
+	}
+	if boundary == "" {
+		return nil
+	}
+	tip, err := previousTip(repo, repository.HeadRef(gitDir))
+	if err != nil {
+		return err
+	}
+	if tip == boundary {
+		return nil
+	}
+	if tip == "" {
+		return fmt.Errorf("spor history is missing its integration boundary")
+	}
+	hash := plumbing.NewHash(tip)
+	for {
+		commit, err := repo.CommitObject(hash)
+		if err != nil {
+			return fmt.Errorf("read Spor history: %w", err)
+		}
+		if len(commit.ParentHashes) == 0 {
+			return fmt.Errorf("spor history does not contain its integration boundary")
+		}
+		hash = commit.ParentHashes[0]
+		if hash.String() == boundary {
+			return fmt.Errorf("cannot add while unintegrated Spor commits remain")
+		}
+	}
+}
+
+func previousTip(repo *git.Repository, ref string) (string, error) {
+	current, err := repo.Reference(plumbing.ReferenceName(ref), true)
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	return current.Hash().String(), nil
 }
 
 func publish(repo *git.Repository, headRef, idRef string, tip plumbing.Hash) error {
@@ -131,12 +190,24 @@ func Status(ctx context.Context, repoPath string) (Result, error) {
 // Reset undoes the latest add and reports the latest submission that remains.
 // The user's branch, index, and worktree stay in place.
 func Reset(ctx context.Context, repoPath string) (Result, error) {
+	lock, err := repository.AcquireWriter(repoPath)
+	if err != nil {
+		return Result{}, err
+	}
+	defer repository.ReleaseWriter(lock)
+	return resetRepo(ctx, repoPath)
+}
+
+func resetRepo(ctx context.Context, repoPath string) (Result, error) {
 	repo, gitDir, err := repository.Open(repoPath)
 	if err != nil {
 		return Result{}, err
 	}
 	defer func() { _ = repo.Close() }()
-	latest, ok, err := latestSubmission(ctx, gitDir)
+	if err := repository.EnsureNoPendingIntegration(gitDir); err != nil {
+		return Result{}, err
+	}
+	latest, ok, hasPrevious, err := latestUndoable(ctx, gitDir)
 	if err != nil {
 		return Result{}, err
 	}
@@ -149,7 +220,7 @@ func Reset(ctx context.Context, repoPath string) (Result, error) {
 	if err := removeIDRef(repo, gitDir, latest.id); err != nil {
 		return Result{}, err
 	}
-	if err := restorePreviousTip(ctx, repo, gitDir); err != nil {
+	if err := restoreUndoTip(ctx, repo, gitDir, latest.previous, hasPrevious); err != nil {
 		return Result{}, err
 	}
 	item, ok, err := latestSubmission(ctx, gitDir)
@@ -160,6 +231,21 @@ func Reset(ctx context.Context, repoPath string) (Result, error) {
 		return Result{Message: noSubmissions}, nil
 	}
 	return resultFrom(item), nil
+}
+
+func restoreUndoTip(ctx context.Context, repo *git.Repository, gitDir, previous string, hasPrevious bool) error {
+	if !hasPrevious {
+		return restorePreviousTip(ctx, repo, gitDir)
+	}
+	ref := repository.HeadRef(gitDir)
+	if previous != "" {
+		return setRef(repo.Storer, ref, plumbing.NewHash(previous))
+	}
+	err := repo.Storer.RemoveReference(plumbing.ReferenceName(ref))
+	if errors.Is(err, plumbing.ErrReferenceNotFound) {
+		return nil
+	}
+	return err
 }
 
 func removeIDRef(repo *git.Repository, gitDir, sporID string) error {
@@ -230,9 +316,16 @@ func sporChain(repo *git.Repository, gitDir string) ([]*object.Commit, error) {
 		}
 		return nil, err
 	}
+	boundary, err := repository.Boundary(gitDir)
+	if err != nil {
+		return nil, err
+	}
 	var chain []*object.Commit
 	hash := ref.Hash()
 	for {
+		if hash.String() == boundary {
+			break
+		}
 		commit, err := repo.CommitObject(hash)
 		if err != nil {
 			return nil, err
