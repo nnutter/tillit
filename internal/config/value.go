@@ -16,7 +16,7 @@ func ParseSetValue(key, text string) ([]string, error) {
 	switch kind {
 	case kindCommand:
 		return parseJSONList(key, text)
-	case kindMode:
+	case kindMode, kindFixupProvider, kindFixupVersion, kindFixupEffort:
 		return parseJSONScalar(key, text)
 	default:
 		return nil, fmt.Errorf("unknown config key %q", key)

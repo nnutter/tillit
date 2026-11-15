@@ -19,14 +19,22 @@ const (
 	ModeChange Mode = "change"
 )
 
+// Auditor is the fixup settings for one worktree.
+type Auditor struct {
+	Provider string
+	Model    string
+	Thinking Thinking
+}
+
 // Config is the verification settings for one worktree.
 type Config struct {
 	Command []string
 	Mode    Mode
+	Auditor Auditor
 }
 
 type document struct {
-	Verify *verifyDocument `json:"verify,omitempty"`
+	Auditor *auditorDocument `json:"auditor,omitempty"`
 }
 
 type verifyDocument struct {
@@ -35,10 +43,25 @@ type verifyDocument struct {
 	Mode    string    `json:"mode,omitempty"`
 }
 
+type auditorDocument struct {
+	Verify *verifyDocument `json:"verify,omitempty"`
+	Fixup  *fixupDocument  `json:"fixup,omitempty"`
+}
+
+type fixupDocument struct {
+	Model *fixupModel `json:"model,omitempty"`
+}
+
+type fixupModel struct {
+	Provider string `json:"provider,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Effort   string `json:"effort,omitempty"`
+}
+
 // Load reads the global, repository, and worktree config files.
 // A later file replaces only the fields it sets. The mode defaults to change.
 func Load(gitDir string) (Config, error) {
-	cfg := Config{Mode: ModeChange}
+	cfg := Config{Mode: ModeChange, Auditor: Auditor{Thinking: ThinkingLow}}
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return Config{}, err
@@ -76,19 +99,69 @@ func apply(cfg Config, path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if doc.Verify == nil {
-		return cfg, nil
-	}
-	if doc.Verify.Command != nil {
-		cfg.Command = slices.Clone(*doc.Verify.Command)
-	}
-	if doc.Verify.Mode == "" {
-		return cfg, nil
-	}
-	mode, err := ParseMode(doc.Verify.Mode)
-	if err != nil {
+	if err := applyVerify(&cfg, doc); err != nil {
 		return Config{}, err
 	}
-	cfg.Mode = mode
+	if err := applyAuditor(&cfg, doc); err != nil {
+		return Config{}, err
+	}
 	return cfg, nil
+}
+
+func applyVerify(cfg *Config, doc document) error {
+	verify := docAuditorVerify(doc)
+	if verify == nil {
+		return nil
+	}
+	if verify.Command != nil {
+		cfg.Command = slices.Clone(*verify.Command)
+	}
+	if verify.Mode == "" {
+		return nil
+	}
+	mode, err := ParseMode(verify.Mode)
+	if err != nil {
+		return err
+	}
+	cfg.Mode = mode
+	return nil
+}
+
+func applyAuditor(cfg *Config, doc document) error {
+	model := docFixupModel(doc)
+	if model == nil {
+		return nil
+	}
+	if model.Provider != "" {
+		cfg.Auditor.Provider = model.Provider
+	}
+	if model.Version != "" {
+		cfg.Auditor.Model = model.Version
+	}
+	if model.Effort == "" {
+		return nil
+	}
+	thinking, err := ParseThinking(model.Effort)
+	if err != nil {
+		return err
+	}
+	cfg.Auditor.Thinking = thinking
+	return nil
+}
+
+func docAuditorVerify(doc document) *verifyDocument {
+	if doc.Auditor == nil {
+		return nil
+	}
+	return doc.Auditor.Verify
+}
+
+func docFixupModel(doc document) *fixupModel {
+	if doc.Auditor == nil {
+		return nil
+	}
+	if doc.Auditor.Fixup == nil {
+		return nil
+	}
+	return doc.Auditor.Fixup.Model
 }

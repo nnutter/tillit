@@ -19,31 +19,31 @@ func TestConfigCommandsEditTheWorktreeFile(t *testing.T) {
 	shown := execute(t, dir, "config", "show")
 	require.Contains(t, shown, `"mode": "change"`)
 	require.NoFileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
-	require.Equal(t, "change\n", execute(t, dir, "config", "get", "verify.mode"))
-	_, err := runCLI(t, dir, "config", "get", "verify.command")
+	require.Equal(t, "change\n", execute(t, dir, "config", "get", "auditor.verify.mode"))
+	_, err := runCLI(t, dir, "config", "get", "auditor.verify.command")
 	require.ErrorContains(t, err, "unset")
 
-	execute(t, dir, "config", "set", "verify.command", `["go","test","-count=1","hello world"]`)
-	execute(t, dir, "config", "set", "verify.mode", `"patch"`)
-	require.Equal(t, "go\ntest\n-count=1\nhello world\n", execute(t, dir, "config", "get", "verify.command"))
-	require.Equal(t, "patch\n", execute(t, dir, "config", "get", "verify.mode"))
+	execute(t, dir, "config", "set", "auditor.verify.command", `["go","test","-count=1","hello world"]`)
+	execute(t, dir, "config", "set", "auditor.verify.mode", `"patch"`)
+	require.Equal(t, "go\ntest\n-count=1\nhello world\n", execute(t, dir, "config", "get", "auditor.verify.command"))
+	require.Equal(t, "patch\n", execute(t, dir, "config", "get", "auditor.verify.mode"))
 	require.FileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
 	require.NoFileExists(t, filepath.Join(home, ".config", "spor", "config.json"))
 
-	execute(t, dir, "config", "append", "verify.command", "-race")
-	require.Equal(t, "go\ntest\n-count=1\nhello world\n-race\n", execute(t, dir, "config", "get", "verify.command"))
-	execute(t, dir, "config", "rm", "verify.command", "-count=1")
-	require.Equal(t, "go\ntest\nhello world\n-race\n", execute(t, dir, "config", "get", "verify.command"))
+	execute(t, dir, "config", "append", "auditor.verify.command", "-race")
+	require.Equal(t, "go\ntest\n-count=1\nhello world\n-race\n", execute(t, dir, "config", "get", "auditor.verify.command"))
+	execute(t, dir, "config", "rm", "auditor.verify.command", "-count=1")
+	require.Equal(t, "go\ntest\nhello world\n-race\n", execute(t, dir, "config", "get", "auditor.verify.command"))
 
-	execute(t, dir, "config", "remove", "verify.mode")
-	require.Equal(t, "change\n", execute(t, dir, "config", "get", "verify.mode"))
+	execute(t, dir, "config", "remove", "auditor.verify.mode")
+	require.Equal(t, "change\n", execute(t, dir, "config", "get", "auditor.verify.mode"))
 }
 
 func TestConfigScopeFlagsChooseTheFile(t *testing.T) {
 	dir := cleanRepo(t)
-	execute(t, dir, "config", "set", "--global", "verify.command", `["from-global"]`)
+	execute(t, dir, "config", "set", "--global", "auditor.verify.command", `["from-global"]`)
 
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
@@ -58,10 +58,10 @@ func TestConfigScopeFlagsChooseTheFile(t *testing.T) {
 	require.NotContains(t, globalShown, "change")
 
 	worktree := linkedWorktree(t, dir)
-	execute(t, worktree, "config", "set", "--repository", "verify.mode", `"commit"`)
+	execute(t, worktree, "config", "set", "--repository", "auditor.verify.mode", `"commit"`)
 	require.FileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
 	require.NoFileExists(t, filepath.Join(worktreeGitDir(t, worktree), "spor", "config.json"))
-	require.Equal(t, "commit\n", execute(t, worktree, "config", "get", "verify.mode"))
+	require.Equal(t, "commit\n", execute(t, worktree, "config", "get", "auditor.verify.mode"))
 
 	_, err = runCLI(t, dir, "config", "show", "--global", "--repository")
 	require.ErrorContains(t, err, "scope")
@@ -69,37 +69,37 @@ func TestConfigScopeFlagsChooseTheFile(t *testing.T) {
 
 func TestConfigCompletesKeys(t *testing.T) {
 	get := complete(t, "config", "get", "")
-	require.Contains(t, get, "verify.command\n")
-	require.Contains(t, get, "verify.mode\n")
+	require.Contains(t, get, "auditor.verify.command\n")
+	require.Contains(t, get, "auditor.verify.mode\n")
 	require.Contains(t, completeErr(t, "config", "get", ""), "ShellCompDirectiveNoFileComp")
 
-	prefix := complete(t, "config", "get", "verify.m")
-	require.Contains(t, prefix, "verify.mode\n")
-	require.NotContains(t, prefix, "verify.command")
+	prefix := complete(t, "config", "get", "auditor.verify.m")
+	require.Contains(t, prefix, "auditor.verify.mode\n")
+	require.NotContains(t, prefix, "auditor.verify.command")
 
 	set := complete(t, "config", "set", "--global", "")
-	require.Contains(t, set, "verify.command\n")
-	require.Contains(t, set, "verify.mode\n")
+	require.Contains(t, set, "auditor.verify.command\n")
+	require.Contains(t, set, "auditor.verify.mode\n")
 
-	value := complete(t, "config", "set", "verify.command", "")
-	require.NotContains(t, value, "verify.command")
-	require.NotContains(t, value, "verify.mode")
+	value := complete(t, "config", "set", "auditor.verify.command", "")
+	require.NotContains(t, value, "auditor.verify.command")
+	require.NotContains(t, value, "auditor.verify.mode")
 
-	removed := complete(t, "config", "rm", "verify.c")
-	require.Contains(t, removed, "verify.command\n")
-	require.NotContains(t, removed, "verify.mode")
+	removed := complete(t, "config", "rm", "auditor.verify.c")
+	require.Contains(t, removed, "auditor.verify.command\n")
+	require.NotContains(t, removed, "auditor.verify.mode")
 
 	appended := complete(t, "config", "append", "")
-	require.Contains(t, appended, "verify.command\n")
-	require.Contains(t, appended, "verify.mode\n")
+	require.Contains(t, appended, "auditor.verify.command\n")
+	require.Contains(t, appended, "auditor.verify.mode\n")
 }
 
 func TestConfigRejectsUnknownKeysAndModes(t *testing.T) {
 	dir := cleanRepo(t)
 
-	_, err := runCLI(t, dir, "config", "set", "verify.nope", `["x"]`)
+	_, err := runCLI(t, dir, "config", "set", "auditor.verify.nope", `["x"]`)
 	require.ErrorContains(t, err, "nope")
-	_, err = runCLI(t, dir, "config", "set", "verify.mode", `"nope"`)
+	_, err = runCLI(t, dir, "config", "set", "auditor.verify.mode", `"nope"`)
 	require.ErrorContains(t, err, "mode")
 	require.ErrorContains(t, err, "nope")
 	require.NoFileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))

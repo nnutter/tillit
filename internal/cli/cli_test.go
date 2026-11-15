@@ -14,17 +14,18 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/spor/internal/cli"
+	"github.com/nnutter/spor/internal/daemon"
 )
 
 func TestAddAndStatusPrintTheSubmission(t *testing.T) {
 	dir := repoWithStagedRename(t)
 
-	added := execute(t, dir, "add")
-	require.Contains(t, added, "spor-id: S")
-	require.Contains(t, added, "Refactor: Rename variable x to y in f")
-	require.Contains(t, added, "Apply the remaining added changes")
-
-	require.Equal(t, added, execute(t, dir, "status"))
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	status := execute(t, dir, "status")
+	require.Contains(t, status, "spor-id: S")
+	require.Contains(t, status, "Refactor: Rename variable x to y in f")
+	require.Contains(t, status, "Apply the remaining added changes")
 }
 
 func TestStatusWithNoSubmission(t *testing.T) {
@@ -52,11 +53,12 @@ func TestAddAndStatusShowAPassingVerification(t *testing.T) {
 	dir := repoWithStagedRename(t)
 	writeConfig(t, dir, []string{"true"}, "")
 
-	added := execute(t, dir, "add")
-	require.Contains(t, added, "mode: change")
-	require.Equal(t, 2, strings.Count(added, " passed\n"))
-	require.NotContains(t, added, "failed")
-	require.Equal(t, added, execute(t, dir, "status"))
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	status := execute(t, dir, "status")
+	require.Contains(t, status, "mode: change")
+	require.Equal(t, 2, strings.Count(status, " passed\n"))
+	require.NotContains(t, status, "failed")
 }
 
 func TestAddStopsVerificationAtTheFirstFailure(t *testing.T) {
@@ -64,22 +66,22 @@ func TestAddStopsVerificationAtTheFirstFailure(t *testing.T) {
 	script, logPath := failScript(t)
 	writeConfig(t, dir, []string{"sh", script}, "")
 
-	added, err := runCLI(t, dir, "add")
-	require.ErrorContains(t, err, "verification")
-	require.Equal(t, 1, strings.Count(added, " failed\n"))
-	require.NotContains(t, added, " passed\n")
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	status := execute(t, dir, "status")
+	require.Equal(t, 1, strings.Count(status, " failed\n"))
+	require.NotContains(t, status, " passed\n")
 	require.Len(t, logLines(t, logPath), 1)
-	require.Equal(t, added, execute(t, dir, "status"))
 }
 
 func TestVerifyModeOverridesTheConfiguredMode(t *testing.T) {
 	dir := repoWithStagedRename(t)
 	writeConfig(t, dir, []string{"true"}, "commit")
 	execute(t, dir, "add")
+	drain(t, dir)
 
-	verified := execute(t, dir, "verify", "--mode", "patch")
-	require.Contains(t, verified, "mode: patch")
-	require.Contains(t, verified, " passed\n")
+	require.Equal(t, "Queued.\n", execute(t, dir, "verify", "--mode", "patch"))
+	drain(t, dir)
 	require.Contains(t, execute(t, dir, "status"), "mode: commit")
 }
 
@@ -95,27 +97,63 @@ func TestVerifyWithNothingToCheck(t *testing.T) {
 	dir := cleanRepo(t)
 	writeConfig(t, dir, []string{"true"}, "")
 
-	require.Equal(t, "No commits to verify.\n", execute(t, dir, "verify"))
-	require.Equal(t, "No staged changes.\n", execute(t, dir, "add"))
+	require.Equal(t, "Queued.\n", execute(t, dir, "verify"))
+	drain(t, dir)
+	require.Equal(t, "No submissions.\n", execute(t, dir, "status"))
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	require.Equal(t, "No submissions.\n", execute(t, dir, "status"))
 }
 
-func TestVerifyRequiresACommand(t *testing.T) {
-	_, err := runCLI(t, cleanRepo(t), "verify")
-	require.ErrorContains(t, err, "command")
+func TestAddFixesAFailingVerification(t *testing.T) {
+	dir := repoWithStagedRename(t)
+	script, _ := writeScript(t, "#!/bin/sh\ntest -f fix.txt\n")
+	writeFullConfig(t, dir, []string{"sh", script}, "fake", "mark-1")
+	piScript(t)
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	out := execute(t, dir, "log")
+	require.Contains(t, out, "Fixup ")
+	require.Contains(t, out, "(passed)")
+	require.NotContains(t, execute(t, dir, "status"), "passed")
+	_, err := os.Stat(filepath.Join(dir, "fix.txt"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestAddHaltsAfterFixupAttempts(t *testing.T) {
+	dir := repoWithStagedRename(t)
+	script, _ := writeScript(t, "#!/bin/sh\ntest -f never.txt\n")
+	writeFullConfig(t, dir, []string{"sh", script}, "fake", "mark-1")
+	piScript(t)
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	out := execute(t, dir, "log")
+	require.Contains(t, out, "Fixup ")
+	require.Equal(t, 4, strings.Count(out, "(failed)\n"))
+}
+
+func TestVerifyQueuesWithoutACommand(t *testing.T) {
+	dir := cleanRepo(t)
+	require.Equal(t, "Queued.\n", execute(t, dir, "verify"))
+	drain(t, dir)
+	require.Equal(t, "No submissions.\n", execute(t, dir, "status"))
 }
 
 func TestStageIsAnAliasForAdd(t *testing.T) {
 	dir := repoWithStagedRename(t)
 
-	added := execute(t, dir, "add")
-	require.Equal(t, added, execute(t, dir, "status"))
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	status := execute(t, dir, "status")
+	require.Contains(t, status, "spor-id: S")
 
 	other := repoWithStagedRename(t)
-	staged := execute(t, other, "stage")
+	require.Equal(t, "Queued.\n", execute(t, other, "stage"))
+	drain(t, other)
+	staged := execute(t, other, "status")
 	require.Contains(t, staged, "spor-id: S")
 	require.Contains(t, staged, "Refactor: Rename variable x to y in f")
 	require.Contains(t, staged, "Apply the remaining added changes")
-	require.Equal(t, staged, execute(t, other, "status"))
 }
 
 func TestSubmitIsNotFound(t *testing.T) {
@@ -130,8 +168,13 @@ func TestSubmitIsNotFound(t *testing.T) {
 func TestResetUndoesLatestAdd(t *testing.T) {
 	dir := repoWithStagedRename(t)
 
-	first := execute(t, dir, "add")
-	second := execute(t, dir, "add")
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	first := execute(t, dir, "status")
+
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
+	second := execute(t, dir, "status")
 	require.NotEqual(t, first, second)
 
 	reset := execute(t, dir, "reset")
@@ -152,6 +195,7 @@ func TestResetWithNoAdd(t *testing.T) {
 func TestLogShowsNewestFirstWithUnverified(t *testing.T) {
 	dir := repoWithStagedRename(t)
 	execute(t, dir, "add")
+	drain(t, dir)
 
 	out := execute(t, dir, "log")
 	require.Equal(t, 2, strings.Count(out, "(unverified)\n"))
@@ -168,6 +212,7 @@ func TestLogShowsPassedAfterVerify(t *testing.T) {
 	dir := repoWithStagedRename(t)
 	writeConfig(t, dir, []string{"true"}, "")
 	execute(t, dir, "add")
+	drain(t, dir)
 
 	out := execute(t, dir, "log")
 	require.Equal(t, 2, strings.Count(out, "(passed)\n"))
@@ -178,12 +223,23 @@ func TestLogShowsFailedAfterVerify(t *testing.T) {
 	dir := repoWithStagedRename(t)
 	script, _ := failScript(t)
 	writeConfig(t, dir, []string{"sh", script}, "")
-	_, err := runCLI(t, dir, "add")
-	require.ErrorContains(t, err, "verification")
+	require.Equal(t, "Queued.\n", execute(t, dir, "add"))
+	drain(t, dir)
 
 	out := execute(t, dir, "log")
 	require.Equal(t, 1, strings.Count(out, "(failed)\n"))
 	require.Equal(t, 1, strings.Count(out, "(unverified)\n"))
+}
+
+func drain(t *testing.T, dir string) {
+	t.Helper()
+	for {
+		ok, err := daemon.ProcessPending(t.Context(), dir)
+		require.NoError(t, err)
+		if !ok {
+			return
+		}
+	}
 }
 
 func execute(t *testing.T, dir string, args ...string) string {
@@ -252,7 +308,7 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 
 func writeConfig(t *testing.T, dir string, command []string, mode string) {
 	t.Helper()
-	body, err := json.Marshal(verifyDocument{Verify: verifySettings{Command: command, Mode: mode}})
+	body, err := json.Marshal(verifyDocument{Auditor: auditorDocument{Verify: verifySettings{Command: command, Mode: mode}}})
 	require.NoError(t, err)
 	path := filepath.Join(dir, ".git", "spor", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -260,12 +316,64 @@ func writeConfig(t *testing.T, dir string, command []string, mode string) {
 }
 
 type verifyDocument struct {
+	Auditor auditorDocument `json:"auditor"`
+}
+
+type auditorDocument struct {
 	Verify verifySettings `json:"verify"`
+	Fixup  fixupSettings  `json:"fixup"`
+}
+
+type fixupSettings struct {
+	Model fixupModelSettings `json:"model"`
+}
+
+type fixupModelSettings struct {
+	Provider string `json:"provider,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Effort   string `json:"effort,omitempty"`
 }
 
 type verifySettings struct {
 	Command []string `json:"command"`
 	Mode    string   `json:"mode,omitempty"`
+}
+
+type fullDocument struct {
+	Auditor auditorDocument `json:"auditor"`
+}
+
+func writeFullConfig(t *testing.T, dir string, command []string, provider, model string) {
+	t.Helper()
+	body, err := json.Marshal(fullDocument{
+		Auditor: auditorDocument{
+			Verify: verifySettings{Command: command},
+			Fixup:  fixupSettings{Model: fixupModelSettings{Provider: provider, Version: model}},
+		},
+	})
+	require.NoError(t, err)
+	path := filepath.Join(dir, ".git", "spor", "config.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, body, 0o644))
+}
+
+func writeScript(t *testing.T, body string) (string, string) {
+	t.Helper()
+	dir := t.TempDir()
+	logPath := filepath.Join(dir, "log")
+	script := filepath.Join(dir, "verify.sh")
+	require.NoError(t, os.WriteFile(script, []byte(body), 0o755))
+	t.Setenv("VERIFY_LOG", logPath)
+	return script, logPath
+}
+
+func piScript(t *testing.T) {
+	t.Helper()
+	dir := t.TempDir()
+	script := filepath.Join(dir, "pi")
+	body := "#!/bin/sh\nprintf 'fixed\\n' >> fix.txt\n"
+	require.NoError(t, os.WriteFile(script, []byte(body), 0o755))
+	t.Setenv("PATH", filepath.Join(dir, ":"+os.Getenv("PATH")))
 }
 
 func failScript(t *testing.T) (string, string) {

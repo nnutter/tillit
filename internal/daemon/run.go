@@ -1,0 +1,29 @@
+package daemon
+
+import (
+	"context"
+	"time"
+)
+
+// Run owns the spor worktree lock and polls queued requests until cancelled.
+// Only one daemon may hold the lock for a worktree at a time.
+func Run(ctx context.Context, repoPath string) error {
+	lock, err := acquireWorktreeLock(repoPath)
+	if err != nil {
+		return err
+	}
+	defer releaseWorktreeLock(lock)
+
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			// A failed request is already marked done; the daemon
+			// keeps polling so the next request still gets served.
+			_, _ = ProcessPending(ctx, repoPath)
+		}
+	}
+}

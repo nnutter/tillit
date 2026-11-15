@@ -1,13 +1,11 @@
 package add
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/smith"
+	"github.com/nnutter/spor/internal/daemon"
 )
 
 // New builds the add command.
@@ -26,25 +24,9 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	result, err := smith.Add(cmd.Context(), repo)
-	if err != nil {
+	if err := daemon.EnqueueAdd(cmd.Context(), repo); err != nil {
 		return err
 	}
-	text := smith.Format(result)
-	verified, err := auditor.Verify(cmd.Context(), repo, "")
-	if errors.Is(err, auditor.ErrCommandNotConfigured) {
-		_, err = fmt.Fprint(cmd.OutOrStdout(), text)
-		return err
-	}
-	if err != nil {
-		_, printErr := fmt.Fprint(cmd.OutOrStdout(), text)
-		return errors.Join(printErr, err)
-	}
-	if _, err := fmt.Fprint(cmd.OutOrStdout(), text+auditor.Format(verified.Mode, verified.Outcomes)); err != nil {
-		return err
-	}
-	if verified.Failed {
-		return errors.New("verification failed")
-	}
-	return nil
+	_, err = fmt.Fprint(cmd.OutOrStdout(), "Queued.\n")
+	return err
 }

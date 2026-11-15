@@ -98,6 +98,9 @@ type valueKind int
 const (
 	kindMode valueKind = iota
 	kindCommand
+	kindFixupProvider
+	kindFixupVersion
+	kindFixupEffort
 )
 
 func kindOf(key string) (valueKind, error) {
@@ -114,6 +117,12 @@ func kindByName(name, key string) (valueKind, error) {
 		return kindMode, nil
 	case "Command":
 		return kindCommand, nil
+	case "Provider":
+		return kindFixupProvider, nil
+	case "Version":
+		return kindFixupVersion, nil
+	case "Effort":
+		return kindFixupEffort, nil
 	default:
 		return 0, fmt.Errorf("unknown config key %q", key)
 	}
@@ -130,13 +139,37 @@ func documentFor(gitDir string, scope Scope) (document, error) {
 	return readScope(gitDir, scope)
 }
 
+func fixupModelIsSet(model *fixupModel) bool {
+	if model.Provider == "" {
+		if model.Version == "" {
+			return model.Effort != ""
+		}
+		return true
+	}
+	return true
+}
+
 func effectiveDocument(cfg Config) document {
 	verify := &verifyDocument{Mode: string(cfg.Mode)}
 	if len(cfg.Command) > 0 {
 		command := slices.Clone(cfg.Command)
 		verify.Command = &command
 	}
-	return document{Verify: verify}
+	model := &fixupModel{}
+	if cfg.Auditor.Provider != "" {
+		model.Provider = cfg.Auditor.Provider
+	}
+	if cfg.Auditor.Model != "" {
+		model.Version = cfg.Auditor.Model
+	}
+	if cfg.Auditor.Thinking != nil {
+		model.Effort = cfg.Auditor.Thinking.String()
+	}
+	var fixup *fixupDocument
+	if fixupModelIsSet(model) {
+		fixup = &fixupDocument{Model: model}
+	}
+	return document{Auditor: &auditorDocument{Verify: verify, Fixup: fixup}}
 }
 
 func readScope(gitDir string, scope Scope) (document, error) {
@@ -214,9 +247,29 @@ func assign(doc *document, kind valueKind, values []string) error {
 		command := slices.Clone(values)
 		ensureVerify(doc).Command = &command
 		return nil
+	case kindFixupProvider:
+		return assignSingle(doc, values, func(doc *document, value string) {
+			ensureFixupModel(doc).Provider = value
+		})
+	case kindFixupVersion:
+		return assignSingle(doc, values, func(doc *document, value string) {
+			ensureFixupModel(doc).Version = value
+		})
+	case kindFixupEffort:
+		return assignSingle(doc, values, func(doc *document, value string) {
+			ensureFixupModel(doc).Effort = value
+		})
 	default:
 		return fmt.Errorf("unknown config key")
 	}
+}
+
+func assignSingle(doc *document, values []string, set func(*document, string)) error {
+	if len(values) != 1 {
+		return fmt.Errorf("%s accepts one value", "auditor setting")
+	}
+	set(doc, values[0])
+	return nil
 }
 
 func assignMode(doc *document, values []string) error {
@@ -235,43 +288,108 @@ func deleteKey(doc *document, kind valueKind) error {
 	if err := clearKey(doc, kind); err != nil {
 		return err
 	}
-	if verifyEmpty(doc) {
-		doc.Verify = nil
+	if auditorVerifyEmpty(doc) {
+		doc.Auditor.Verify = nil
+	}
+	if fixupEmpty(doc) {
+		doc.Auditor.Fixup = nil
+	}
+	if auditorEmpty(doc) {
+		doc.Auditor = nil
 	}
 	return nil
 }
 
 func clearKey(doc *document, kind valueKind) error {
-	if doc.Verify == nil {
-		return unset(kindName(kind))
-	}
 	switch kind {
 	case kindMode:
-		if doc.Verify.Mode == "" {
-			return unset(kindName(kindMode))
-		}
-		doc.Verify.Mode = ""
-		return nil
+		return clearMode(doc)
 	case kindCommand:
-		if doc.Verify.Command == nil {
-			return unset(kindName(kindCommand))
-		}
-		doc.Verify.Command = nil
-		return nil
+		return clearCommand(doc)
+	case kindFixupProvider:
+		return clearProvider(doc)
+	case kindFixupVersion:
+		return clearVersion(doc)
+	case kindFixupEffort:
+		return clearEffort(doc)
 	default:
 		return fmt.Errorf("unknown config key")
 	}
 }
 
+func clearMode(doc *document) error {
+	verify := docAuditorVerify(*doc)
+	if verify == nil {
+		return unset(kindName(kindMode))
+	}
+	if verify.Mode == "" {
+		return unset(kindName(kindMode))
+	}
+	verify.Mode = ""
+	return nil
+}
+
+func clearCommand(doc *document) error {
+	verify := docAuditorVerify(*doc)
+	if verify == nil {
+		return unset(kindName(kindCommand))
+	}
+	if verify.Command == nil {
+		return unset(kindName(kindCommand))
+	}
+	verify.Command = nil
+	return nil
+}
+
+func clearProvider(doc *document) error {
+	model := docFixupModel(*doc)
+	if model == nil {
+		return unset(kindName(kindFixupProvider))
+	}
+	if model.Provider == "" {
+		return unset(kindName(kindFixupProvider))
+	}
+	model.Provider = ""
+	return nil
+}
+
+func clearVersion(doc *document) error {
+	model := docFixupModel(*doc)
+	if model == nil {
+		return unset(kindName(kindFixupVersion))
+	}
+	if model.Version == "" {
+		return unset(kindName(kindFixupVersion))
+	}
+	model.Version = ""
+	return nil
+}
+
+func clearEffort(doc *document) error {
+	model := docFixupModel(*doc)
+	if model == nil {
+		return unset(kindName(kindFixupEffort))
+	}
+	if model.Effort == "" {
+		return unset(kindName(kindFixupEffort))
+	}
+	model.Effort = ""
+	return nil
+}
+
 func deleteValue(doc *document, key, value string) error {
-	if commandMissing(doc.Verify) {
+	verify := docAuditorVerify(*doc)
+	if verify == nil {
 		return unset(key)
 	}
-	next, found := withoutValue(*doc.Verify.Command, value)
+	if verify.Command == nil {
+		return unset(key)
+	}
+	next, found := withoutValue(*verify.Command, value)
 	if !found {
 		return fmt.Errorf("%q does not match a value of %s", value, key)
 	}
-	doc.Verify.Command = &next
+	verify.Command = &next
 	return nil
 }
 
@@ -289,41 +407,81 @@ func withoutValue(values []string, value string) ([]string, bool) {
 }
 
 func commandOf(doc *document) []string {
-	if commandMissing(doc.Verify) {
+	verify := docAuditorVerify(*doc)
+	if verify == nil {
 		return nil
 	}
-	return slices.Clone(*doc.Verify.Command)
+	if verify.Command == nil {
+		return nil
+	}
+	return slices.Clone(*verify.Command)
 }
 
-func commandMissing(verify *verifyDocument) bool {
+func auditorVerifyEmpty(doc *document) bool {
+	verify := docAuditorVerify(*doc)
 	if verify == nil {
 		return true
+	}
+	if verify.Mode != "" {
+		return false
 	}
 	return verify.Command == nil
 }
 
-func modeMissing(verify *verifyDocument) bool {
-	if verify == nil {
+func fixupEmpty(doc *document) bool {
+	if doc.Auditor == nil {
 		return true
 	}
-	return verify.Mode == ""
+	if doc.Auditor.Fixup == nil {
+		return true
+	}
+	if doc.Auditor.Fixup.Model == nil {
+		return true
+	}
+	return fixupModelIsEmpty(doc.Auditor.Fixup.Model)
 }
 
-func verifyEmpty(doc *document) bool {
-	if doc.Verify == nil {
-		return true
-	}
-	if doc.Verify.Mode != "" {
+func fixupModelIsEmpty(model *fixupModel) bool {
+	if model.Provider == "" {
+		if model.Version == "" {
+			return model.Effort == ""
+		}
 		return false
 	}
-	return doc.Verify.Command == nil
+	return false
+}
+
+func auditorEmpty(doc *document) bool {
+	if doc.Auditor == nil {
+		return true
+	}
+	if !auditorVerifyEmpty(doc) {
+		return false
+	}
+	return fixupEmpty(doc)
 }
 
 func ensureVerify(doc *document) *verifyDocument {
-	if doc.Verify == nil {
-		doc.Verify = &verifyDocument{}
+	if doc.Auditor == nil {
+		doc.Auditor = &auditorDocument{}
 	}
-	return doc.Verify
+	if doc.Auditor.Verify == nil {
+		doc.Auditor.Verify = &verifyDocument{}
+	}
+	return doc.Auditor.Verify
+}
+
+func ensureFixupModel(doc *document) *fixupModel {
+	if doc.Auditor == nil {
+		doc.Auditor = &auditorDocument{}
+	}
+	if doc.Auditor.Fixup == nil {
+		doc.Auditor.Fixup = &fixupDocument{}
+	}
+	if doc.Auditor.Fixup.Model == nil {
+		doc.Auditor.Fixup.Model = &fixupModel{}
+	}
+	return doc.Auditor.Fixup.Model
 }
 
 func formatField(doc document, key string) (string, error) {
@@ -336,23 +494,64 @@ func formatField(doc document, key string) (string, error) {
 		return formatMode(doc)
 	case kindCommand:
 		return formatCommand(doc)
+	case kindFixupProvider:
+		return formatFixupString(doc, key)
+	case kindFixupVersion:
+		return formatFixupString(doc, key)
+	case kindFixupEffort:
+		return formatFixupString(doc, key)
+	default:
+		return "", fmt.Errorf("unknown config key %q", key)
+	}
+}
+
+func formatFixupString(doc document, key string) (string, error) {
+	model := docFixupModel(doc)
+	if model == nil {
+		return "", unset(key)
+	}
+	kind, _ := kindOf(key)
+	switch kind {
+	case kindFixupProvider:
+		if model.Provider == "" {
+			return "", unset(key)
+		}
+		return model.Provider + "\n", nil
+	case kindFixupVersion:
+		if model.Version == "" {
+			return "", unset(key)
+		}
+		return model.Version + "\n", nil
+	case kindFixupEffort:
+		if model.Effort == "" {
+			return "", unset(key)
+		}
+		return model.Effort + "\n", nil
 	default:
 		return "", fmt.Errorf("unknown config key %q", key)
 	}
 }
 
 func formatMode(doc document) (string, error) {
-	if modeMissing(doc.Verify) {
+	verify := docAuditorVerify(doc)
+	if verify == nil {
 		return "", unset(kindName(kindMode))
 	}
-	return doc.Verify.Mode + "\n", nil
+	if verify.Mode == "" {
+		return "", unset(kindName(kindMode))
+	}
+	return verify.Mode + "\n", nil
 }
 
 func formatCommand(doc document) (string, error) {
-	if commandMissing(doc.Verify) {
+	verify := docAuditorVerify(doc)
+	if verify == nil {
 		return "", unset(kindName(kindCommand))
 	}
-	return joinLines(*doc.Verify.Command), nil
+	if verify.Command == nil {
+		return "", unset(kindName(kindCommand))
+	}
+	return joinLines(*verify.Command), nil
 }
 
 func joinLines(values []string) string {
@@ -394,6 +593,12 @@ func kindName(kind valueKind) string {
 		return keyByName("Mode")
 	case kindCommand:
 		return keyByName("Command")
+	case kindFixupProvider:
+		return keyByName("Provider")
+	case kindFixupVersion:
+		return keyByName("Version")
+	case kindFixupEffort:
+		return keyByName("Effort")
 	default:
 		return ""
 	}

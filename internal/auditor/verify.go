@@ -32,7 +32,8 @@ type Result struct {
 }
 
 // Verify checks unverified spor commits from oldest to newest.
-// An empty mode uses the configured mode. The walk stops at the first failure.
+// An empty mode uses the configured mode. The walk stops at the first failure
+// that no fixup repairs.
 func Verify(ctx context.Context, repoPath string, mode config.Mode) (Result, error) {
 	repo, gitDir, cfg, mode, err := openVerify(repoPath, mode)
 	if err != nil {
@@ -46,7 +47,7 @@ func Verify(ctx context.Context, repoPath string, mode config.Mode) (Result, err
 	if err != nil {
 		return Result{}, err
 	}
-	return walk(ctx, repoPath, gitDir, cfg.Command, mode, commits)
+	return walk(ctx, repo, repoPath, gitDir, cfg, cfg.Command, mode, commits)
 }
 
 // Report describes the recorded state of each spor commit.
@@ -145,7 +146,7 @@ func openVerify(repoPath string, mode config.Mode) (*git.Repository, string, con
 	return repo, gitDir, cfg, mode, nil
 }
 
-func walk(ctx context.Context, repoPath, gitDir string, command []string, mode config.Mode, commits []*object.Commit) (Result, error) {
+func walk(ctx context.Context, repo *git.Repository, repoPath, gitDir string, cfg config.Config, command []string, mode config.Mode, commits []*object.Commit) (Result, error) {
 	result := Result{Mode: mode}
 	if len(commits) == 0 {
 		return result, nil
@@ -159,18 +160,177 @@ func walk(ctx context.Context, repoPath, gitDir string, command []string, mode c
 		return Result{}, err
 	}
 	defer func() { _ = db.Close() }()
-	for _, commit := range commits {
+	queue := append([]*object.Commit(nil), commits...)
+	for i := 0; i < len(queue); i++ {
+		commit := queue[i]
 		outcome, stop, err := verifyCommit(ctx, db, root, gitDir, command, mode, commit)
 		if err != nil {
 			return Result{}, err
 		}
 		result.Outcomes = append(result.Outcomes, outcome)
-		if stop {
+		if !stop {
+			continue
+		}
+		following := queue[i+1:]
+		fixed, err := fixCommit(ctx, repo, db, root, gitDir, cfg, command, mode, commit, following)
+		if err != nil {
+			return Result{}, err
+		}
+		if !fixed.ok {
 			result.Failed = true
+			result.Outcomes = append(result.Outcomes, fixed.outcomes...)
 			return result, nil
 		}
+		result.Outcomes = append(result.Outcomes, fixed.outcomes...)
+		queue = fixed.queue
+		i = len(queue) - len(fixed.tail) - 1
 	}
 	return result, nil
+}
+
+type fixResult struct {
+	ok       bool
+	outcomes []Outcome
+	queue    []*object.Commit
+	tail     []*object.Commit
+}
+
+func fixCommit(ctx context.Context, repo *git.Repository, db statedb, root, gitDir string, cfg config.Config, command []string, mode config.Mode, commit *object.Commit, following []*object.Commit) (fixResult, error) {
+	if !configured(cfg.Auditor) {
+		return fixResult{ok: false}, nil
+	}
+	target, err := newTarget(repo, gitDir, commit)
+	if err != nil {
+		return fixResult{}, err
+	}
+	if target.sporID == "" {
+		return fixResult{ok: false}, nil
+	}
+	var attempts []Outcome
+	for attempt := target.next(); attempt <= target.limit(); attempt++ {
+		outcome, nextCommit, err := fixAttempt(ctx, repo, db, root, gitDir, cfg, command, mode, commit, target, attempt)
+		if err != nil {
+			return fixResult{}, err
+		}
+		if outcome == nil {
+			return fixResult{ok: false, outcomes: attempts}, nil
+		}
+		attempts = append(attempts, *outcome)
+		commit = nextCommit
+		if outcome.Passed {
+			return replayResult(ctx, repo, gitDir, attempts, following, true)
+		}
+		if attempt == target.limit() {
+			return replayResult(ctx, repo, gitDir, attempts, following, false)
+		}
+	}
+	return fixResult{ok: false, outcomes: attempts}, nil
+}
+
+type fixTarget struct {
+	sporID   string
+	subject  string
+	changeID string
+	existing int
+}
+
+func (t *fixTarget) limit() int {
+	return t.existing + 3
+}
+func (t *fixTarget) next() int { return t.existing + 1 }
+
+func newTarget(repo *git.Repository, gitDir string, commit *object.Commit) (*fixTarget, error) {
+	current, err := sporCommits(repo, gitDir)
+	if err != nil {
+		return nil, err
+	}
+	changeID := changeID(commit.Message)
+	return &fixTarget{
+		sporID:   trailerOf(commit.Message, "Spor-Id"),
+		subject:  subjectOf(commit.Message),
+		changeID: changeID,
+		existing: countFixups(current, changeID),
+	}, nil
+}
+
+func fixAttempt(ctx context.Context, repo *git.Repository, db statedb, root, gitDir string, cfg config.Config, command []string, mode config.Mode, commit *object.Commit, target *fixTarget, attempt int) (*Outcome, *object.Commit, error) {
+	kind, err := runAgent(ctx, gitDir, cfg.Auditor, commit.Hash.String(), target.subject)
+	if err != nil {
+		return nil, commit, nil
+	}
+	if !isFixed(kind) {
+		return nil, commit, nil
+	}
+	hash, err := writeFixup(ctx, repo, gitDir, commit.Hash.String(), target.sporID, target.subject, attempt)
+	if err != nil {
+		return nil, commit, err
+	}
+	if hash == "" {
+		return nil, commit, nil
+	}
+	fixupCommit, err := repo.CommitObject(plumbing.NewHash(hash))
+	if err != nil {
+		return nil, commit, err
+	}
+	outcome, _, err := verifyCommit(ctx, db, root, gitDir, command, mode, fixupCommit)
+	if err != nil {
+		return nil, commit, err
+	}
+	return &outcome, fixupCommit, nil
+}
+
+func isFixed(kind OutcomeKind) bool {
+	switch kind.(type) {
+	case outcomeFixed:
+		return true
+	case outcomeUnchanged:
+		return false
+	case outcomeFailed:
+		return false
+	default:
+		return false
+	}
+}
+
+func replayResult(ctx context.Context, repo *git.Repository, gitDir string, attempts []Outcome, following []*object.Commit, ok bool) (fixResult, error) {
+	tail, err := replayFollowing(ctx, repo, gitDir, following)
+	if err != nil {
+		return fixResult{}, err
+	}
+	head, err := sporCommits(repo, gitDir)
+	if err != nil {
+		return fixResult{}, err
+	}
+	return fixResult{ok: ok, outcomes: attempts, queue: head, tail: tail}, nil
+}
+
+func countFixups(commits []*object.Commit, targetChange string) int {
+	count := 0
+	for _, commit := range commits {
+		if !countsAsFixup(commit, targetChange) {
+			continue
+		}
+		count++
+	}
+	return count
+}
+
+func countsAsFixup(commit *object.Commit, targetChange string) bool {
+	id := trailerOf(commit.Message, "Fixup-Id")
+	if id == "" {
+		return false
+	}
+	if targetChange == "" {
+		return true
+	}
+	return hasFixupPrefix(id, targetChange)
+}
+
+func hasFixupPrefix(id, target string) bool {
+	if len(id) <= len(target) {
+		return false
+	}
+	return id[:len(target)] == target
 }
 
 func verifyCommit(ctx context.Context, db statedb, root, gitDir string, command []string, mode config.Mode, commit *object.Commit) (Outcome, bool, error) {

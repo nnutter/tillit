@@ -57,13 +57,14 @@ After the second rebase, Spor's branch matches the user's.
 ## Spor Commands
 
 - `spor start` - Starts Spor daemon in the current Git worktree.
+- `spor daemon` - Runs the Spor daemon in the current Git worktree.
 - `spor status` - Displays the status of the Spor daemon and any pending changes.
-- `spor add` - Adds the staged changes to Spor for processing.
+- `spor add` - Queues the staged changes for the daemon to process.
   `spor stage` is an alias for `spor add`.
 - `spor reset` - Undoes the latest `spor add`.
 - `spor log` - Shows added commits that are not yet on the user's branch with verification status.
 - `spor rebase` - Tells the daemon (Mender) to rebase into/under the User's branch/worktree.
-- `spor verify` - Verifies spor commits. `--mode` overrides the configured mode for that run.
+- `spor verify` - Queues a verification run. `--mode` selects the mode for that run.
 - `spor stop` - Stops the Spor daemon.
 
 ## Change Tracking
@@ -90,13 +91,15 @@ Spor will add a Spor-Id Git commit message trailer to identify changes that were
 
 - Spor will automatically verify commits.
 - The verification modes are commit, patch, and change, and the default mode is change.
-- `spor add` verifies unverified commits from the oldest forward and stops at the first failure.
-- `spor verify` checks again, and `--mode` overrides the configured mode for that run.
+- The daemon verifies unverified commits from the oldest forward and stops at the first failure.
+- `spor verify` queues a check again, and `--mode` selects the mode for that run.
 - `spor status` shows the verification outcome.
 
 ### 0.3.0
 
-- Spor will automatically make fixup commits for commits that fail verification.
+- Spor automatically makes fixup commits for commits that fail verification.
+- The daemon owns the spor worktree and runs the Smith and Auditor.
+- `spor add` and `spor verify` queue work for the daemon instead of running it in process.
 
 ### 0.4.0
 
@@ -129,14 +132,25 @@ The mode defaults to `change`.
 - Repository configuration is `spor/config.json` in the Git common directory.
 - Worktree configuration is `spor/config.json` in the worktree Git directory when that path is separate from the Git common directory.
 
-`verify.command` is the program and its arguments.
-`verify.mode` is `commit`, `patch`, or `change`.
+`auditor.verify.command` is the program and its arguments.
+`auditor.verify.mode` is `commit`, `patch`, or `change`.
+`auditor.fixup.model.provider` and `auditor.fixup.model.version` select the `pi` agent.
+`auditor.fixup.model.effort` is a `pi` thinking level such as `low`.
 
 ```json
 {
-  "verify": {
-    "command": ["go", "test", "./..."],
-    "mode": "change"
+  "auditor": {
+    "verify": {
+      "command": ["go", "test", "./..."],
+      "mode": "change"
+    },
+    "fixup": {
+      "model": {
+        "provider": "openai",
+        "version": "gpt-5",
+        "effort": "low"
+      }
+    }
   }
 }
 ```

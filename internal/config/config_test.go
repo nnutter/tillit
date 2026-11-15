@@ -20,10 +20,10 @@ func TestLoadDefaultsToChange(t *testing.T) {
 func TestLoadLaterFileReplacesOnlyTheFieldsItSets(t *testing.T) {
 	gitDir := tempGitDir(t)
 	writeConfig(t, filepath.Join(os.Getenv("HOME"), ".config", "spor", "config.json"), `{
-		"verify": {"command": ["go", "test", "./..."], "mode": "commit"}
+		"auditor": {"verify": {"command": ["go", "test", "./..."], "mode": "commit"}}
 	}`)
 	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
-		"verify": {"mode": "patch"}
+		"auditor": {"verify": {"mode": "patch"}}
 	}`)
 
 	cfg := load(t, gitDir)
@@ -36,10 +36,10 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 	common := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "commondir"), []byte(common+"\n"), 0o644))
 	writeConfig(t, filepath.Join(common, "spor", "config.json"), `{
-		"verify": {"command": ["from-common"], "mode": "commit"}
+		"auditor": {"verify": {"command": ["from-common"], "mode": "commit"}}
 	}`)
 	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
-		"verify": {"command": ["from-worktree"]}
+		"auditor": {"verify": {"command": ["from-worktree"]}}
 	}`)
 
 	cfg := load(t, gitDir)
@@ -50,10 +50,32 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 func TestLoadRejectsAnUnknownMode(t *testing.T) {
 	gitDir := tempGitDir(t)
 	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
-		"verify": {"mode": "nope"}
+		"auditor": {"verify": {"mode": "nope"}}
 	}`)
 	_, err := config.Load(gitDir)
 	require.ErrorContains(t, err, "mode")
+	require.ErrorContains(t, err, "nope")
+}
+
+func TestLoadReadsAuditorSettings(t *testing.T) {
+	gitDir := tempGitDir(t)
+	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+		"auditor": {"fixup": {"model": {"provider": "openai", "version": "gpt-5", "effort": "minimal"}}}
+	}`)
+
+	cfg := load(t, gitDir)
+	require.Equal(t, "openai", cfg.Auditor.Provider)
+	require.Equal(t, "gpt-5", cfg.Auditor.Model)
+	require.Equal(t, "minimal", cfg.Auditor.Thinking.String())
+}
+
+func TestLoadRejectsAnUnknownThinking(t *testing.T) {
+	gitDir := tempGitDir(t)
+	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+		"auditor": {"fixup": {"model": {"effort": "nope"}}}
+	}`)
+	_, err := config.Load(gitDir)
+	require.ErrorContains(t, err, "effort")
 	require.ErrorContains(t, err, "nope")
 }
 

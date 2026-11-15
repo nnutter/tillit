@@ -33,11 +33,11 @@ func changeID(message string) string {
 }
 
 func patchID(ctx context.Context, gitDir, hash string) (string, error) {
-	out, err := gitOutput(ctx, "", "--git-dir", gitDir, "diff-tree", "-p", hash)
+	out, err := gitOutput(ctx, gitDir, "--git-dir", gitDir, "diff-tree", "-p", hash)
 	if err != nil {
 		return "", err
 	}
-	id, err := gitInput(ctx, out, "patch-id", "--stable")
+	id, err := gitInput(ctx, gitDir, out, "patch-id", "--stable")
 	if err != nil {
 		return "", err
 	}

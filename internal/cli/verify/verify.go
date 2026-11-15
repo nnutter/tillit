@@ -1,13 +1,12 @@
 package verify
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
 
-	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/config"
+	"github.com/nnutter/spor/internal/daemon"
 )
 
 // New builds the verify command.
@@ -31,21 +30,11 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	result, err := auditor.Verify(cmd.Context(), repo, mode)
-	if err != nil {
+	if err := daemon.EnqueueVerify(cmd.Context(), repo, string(mode)); err != nil {
 		return err
 	}
-	text := "No commits to verify.\n"
-	if len(result.Outcomes) > 0 {
-		text = auditor.Format(result.Mode, result.Outcomes)
-	}
-	if _, err := fmt.Fprint(cmd.OutOrStdout(), text); err != nil {
-		return err
-	}
-	if result.Failed {
-		return errors.New("verification failed")
-	}
-	return nil
+	_, err = fmt.Fprint(cmd.OutOrStdout(), "Queued.\n")
+	return err
 }
 
 func selectedMode(cmd *cobra.Command) (config.Mode, error) {

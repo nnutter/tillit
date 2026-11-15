@@ -290,7 +290,7 @@ func signature() *object.Signature {
 
 func writeConfig(t *testing.T, dir string, command []string, mode string) {
 	t.Helper()
-	body, err := json.Marshal(verifyDocument{Verify: verifySettings{Command: command, Mode: mode}})
+	body, err := json.Marshal(verifyDocument{Auditor: auditorDocument{Verify: verifySettings{Command: command, Mode: mode}}})
 	require.NoError(t, err)
 	path := filepath.Join(dir, ".git", "spor", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -298,7 +298,22 @@ func writeConfig(t *testing.T, dir string, command []string, mode string) {
 }
 
 type verifyDocument struct {
+	Auditor auditorDocument `json:"auditor"`
+}
+
+type auditorDocument struct {
 	Verify verifySettings `json:"verify"`
+	Fixup  fixupSettings  `json:"fixup"`
+}
+
+type fixupSettings struct {
+	Model fixupModelSettings `json:"model"`
+}
+
+type fixupModelSettings struct {
+	Provider string `json:"provider,omitempty"`
+	Version  string `json:"version,omitempty"`
+	Effort   string `json:"effort,omitempty"`
 }
 
 type verifySettings struct {

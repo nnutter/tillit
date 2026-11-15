@@ -78,7 +78,7 @@ func verifyPassed(t *testing.T, dir string) {
 func writeWorktreeConfig(t *testing.T, dir string, command []string) {
 	t.Helper()
 	gitDir := strings.TrimSpace(runGit(t, dir, "rev-parse", "--absolute-git-dir"))
-	body, err := json.Marshal(verifyDocument{Verify: verifySettings{Command: command}})
+	body, err := json.Marshal(verifyDocument{Auditor: auditorDocument{Verify: verifySettings{Command: command}}})
 	require.NoError(t, err)
 	path := filepath.Join(gitDir, "spor", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -117,6 +117,7 @@ func miseTrustWord(t *testing.T, dir string) string {
 func runMise(t *testing.T, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "mise", args...)
+	cmd.Dir = t.TempDir()
 	cmd.Env = withoutGitEnv(os.Environ())
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))

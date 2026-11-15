@@ -46,7 +46,7 @@ func addWorktree(ctx context.Context, gitDir, dest, hash string) error {
 	if err != nil {
 		return err
 	}
-	return runGit(ctx, "", "--git-dir", common, "worktree", "add", "--detach", dest, hash)
+	return runGit(ctx, common, "--git-dir", common, "worktree", "add", "--detach", dest, hash)
 }
 
 func runCommand(ctx context.Context, gitDir string, command []string) (bool, error) {
@@ -86,8 +86,8 @@ func gitOutput(ctx context.Context, dir string, args ...string) (string, error) 
 	return string(out), nil
 }
 
-func gitInput(ctx context.Context, input string, args ...string) (string, error) {
-	cmd := gitCommand(ctx, "", args...)
+func gitInput(ctx context.Context, dir, input string, args ...string) (string, error) {
+	cmd := gitCommand(ctx, dir, args...)
 	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
