@@ -64,6 +64,9 @@ func TestVerifyStopsAtTheFirstFailure(t *testing.T) {
 		{Hash: added.Commits[1].Hash, Passed: false},
 	}, verified.Outcomes)
 	require.Equal(t, []string{"a.go", "c.go"}, logLines(t, logPath))
+	prefix, err := auditor.VerifiedPrefix(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, []string{added.Commits[0].Hash}, prefix)
 
 	report, err := auditor.Report(t.Context(), dir)
 	require.NoError(t, err)

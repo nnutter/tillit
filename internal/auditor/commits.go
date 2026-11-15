@@ -20,9 +20,16 @@ func sporCommits(repo *git.Repository, gitDir string) ([]*object.Commit, error) 
 		}
 		return nil, err
 	}
+	boundary, err := repository.Boundary(gitDir)
+	if err != nil {
+		return nil, err
+	}
 	var chain []*object.Commit
 	hash := ref.Hash()
 	for {
+		if hash.String() == boundary {
+			break
+		}
 		commit, err := repo.CommitObject(hash)
 		if err != nil {
 			return nil, err
