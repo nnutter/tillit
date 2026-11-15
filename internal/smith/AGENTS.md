@@ -5,3 +5,9 @@
   I'd rather duplicate the code over than call out to `intent`.
 - The Smith receives a patch/diff with an assigned Spor-Id which propagates to commits it extracts from the path/diff.
 - The Smith can maintain an isolated Git Index in order to build commits.
+
+## Skills
+
+Load the skills named in ancestor `AGENTS.md` files before working here.
+
+This package adds no further skill.

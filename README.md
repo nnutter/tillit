@@ -39,20 +39,20 @@ After the second rebase, Spor's branch matches the user's.
 ![After the second rebase, both branches match](docs/diagrams/git-after-second-rebase.svg)
 
 - `A`
-  `Change-Id: C1`
-  `Spor-Id: S1`
+  - `Change-Id: C1`
+  - `Spor-Id: S1`
 - `A'`
-  `Change-Id: C2`
-  `Fixup-Id: C1-1`
+  - `Change-Id: C2`
+  - `Fixup-Id: C1-1`
 - `B`
-  `Change-Id: C3`
-  `Spor-Id: S1`
+  - `Change-Id: C3`
+  - `Spor-Id: S1`
 - `C`
-  `Change-Id: C4`
-  `Spor-Id: S1`
+  - `Change-Id: C4`
+  - `Spor-Id: S1`
 - `C'`
-  `Change-Id: C5`
-  `Fixup-Id: C4-1`
+  - `Change-Id: C5`
+  - `Fixup-Id: C4-1`
 
 ## Spor Commands
 
@@ -81,6 +81,8 @@ Spor will add a Spor-Id Git commit message trailer to identify changes that were
 ### 0.1.0
 
 - Spor will automatically extract and commit basic refactor commits from your staged changes.
+- `spor submit` writes those commits and leaves the branch, index, and worktree alone.
+- `spor status` shows the latest submission.
 
 ### 0.2.0
 
