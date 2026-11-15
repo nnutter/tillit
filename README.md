@@ -63,7 +63,12 @@ After the second rebase, Spor's branch matches the user's.
   `spor stage` is an alias for `spor add`.
 - `spor reset` - Undoes the latest `spor add`.
 - `spor log` - Shows added commits that are not yet on the user's branch with verification status.
-- `spor rebase` - Tells the daemon (Mender) to rebase into/under the User's branch/worktree.
+- `spor rebase` - Queues integration of verified Spor commits into the current branch.
+  `spor status` reports the outcome.
+  The branch must be attached, and the worktree and index must be clean, with no Git operation in progress.
+  Spor prepares the verified prefix and the remaining pending commits together.
+  A conflict in either part can block the whole request without changing the user's branch or Spor history.
+  After a partial integration, `spor add` is refused until the remaining Spor commits are integrated.
 - `spor verify` - Queues a verification run. `--mode` selects the mode for that run.
 - `spor stop` - Stops the Spor daemon.
 
@@ -136,6 +141,10 @@ The mode defaults to `change`.
 `auditor.verify.mode` is `commit`, `patch`, or `change`.
 `auditor.fixup.model.provider` and `auditor.fixup.model.version` select the `pi` agent.
 `auditor.fixup.model.effort` is a `pi` thinking level such as `low`.
+`mender.conflict.model.provider`, `mender.conflict.model.version`, and `mender.conflict.model.effort` configure `pi` for resolving rebase conflicts.
+The provider and version are required only when a conflict occurs, and effort defaults to `low`.
+Spor prepares integration in an isolated checkout and checks the branch and worktree again before publication.
+External Git commands can still race with publication, so avoid changing the branch or worktree while a rebase request runs.
 
 ```json
 {
