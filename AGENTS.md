@@ -33,3 +33,7 @@ Load these when that API is part of the change:
 - `go-modern-context-cancel-cause`, `go-modern-context-after-func`, and `go-modern-context-timeout-deadline-cause` when work must stop with a cause, cleanup, or a deadline.
 - `go-modern-sync-waitgroup-go` when a `sync.WaitGroup` tracks goroutines.
 - `go-modern-json-v2` and `go-modern-json-omitzero` when reading or writing JSON, including Spor configuration.
+
+## Subagents
+
+Use gpt-6.1-sol on high effort for planning and delegate all work to a subagent running gpt-6.1-terra on medium effort.
