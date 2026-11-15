@@ -1,0 +1,32 @@
+[tools]
+betterleaks = "latest"
+"github:nnutter/mdlint" = "latest"
+hk = "2.12.0"
+jactionlint = "latest"
+node = "24"
+"npm:oxfmt" = "latest"
+"npm:oxlint" = "latest"
+"npm:pele" = "1.13.0"
+"npm:typescript" = "latest"
+pkl = "latest"
+
+[tasks.check]
+description = "Check all files without writing fixes"
+run = "hk check --all"
+
+[tasks.diagrams]
+description = "Build the README diagram SVGs with Pele"
+sources = ["docs/diagrams/*.mmd", "scripts/render-diagrams.mjs"]
+outputs = ["docs/diagrams/*.svg"]
+run = "node scripts/render-diagrams.mjs"
+
+[tasks.fix]
+description = "Fix all files, or only the supplied files"
+usage = 'arg "[staged_files]" var=#true'
+run = '''
+if [ -z "${usage_staged_files:-}" ]; then
+  hk fix --all
+else
+  hk fix ${usage_staged_files}
+fi
+'''

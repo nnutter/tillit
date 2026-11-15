@@ -1,0 +1,17 @@
+---
+config:
+  gitGraph:
+    mainBranchName: user
+---
+gitGraph
+  accTitle: After the first rebase, the user commits D
+  accDescr: spor rebase brings the verified commits A, A!, and B onto the user branch. The user commits D on top of B. C and C! stay on the spor branch because C! has not passed yet.
+  commit id: "A"
+  commit id: "A!"
+  commit id: "B"
+  branch spor
+  checkout spor
+  commit id: "C"
+  commit id: "C!"
+  checkout user
+  commit id: "D"

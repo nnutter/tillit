@@ -1,0 +1,25 @@
+---
+config:
+  gitGraph:
+    mainBranchName: user
+    parallelCommits: true
+---
+%% The user ids include a zero-width space so they can repeat the spor labels.
+gitGraph
+  accTitle: After the second rebase, both branches match
+  accDescr: Once C! passes, spor rebase replays C and C! after D. Spor's branch then matches the user branch: A, A!, B, D, C, C!.
+  branch spor
+  checkout spor
+  commit id: "A"
+  commit id: "A!"
+  commit id: "B"
+  commit id: "D"
+  commit id: "C"
+  commit id: "C!"
+  checkout user
+  commit id: "A​"
+  commit id: "A!​"
+  commit id: "B​"
+  commit id: "D​"
+  commit id: "C​"
+  commit id: "C!​"
