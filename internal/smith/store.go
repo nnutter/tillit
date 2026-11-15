@@ -72,6 +72,57 @@ func latestSubmission(ctx context.Context, gitDir string) (submission, bool, err
 	return item, true, nil
 }
 
+func deleteSubmission(ctx context.Context, gitDir, id string) error {
+	db, err := openState(ctx, gitDir)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = db.Close() }()
+	_, err = db.ExecContext(ctx, `DELETE FROM submission WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete submission: %w", err)
+	}
+	return nil
+}
+
+func latestTip(ctx context.Context, gitDir string) (string, bool, error) {
+	db, err := openState(ctx, gitDir)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = db.Close() }()
+	rows, err := db.QueryContext(ctx, `
+		SELECT outcome, commits
+		FROM submission
+		ORDER BY created DESC, rowid DESC
+	`)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var outcome, body string
+		if err := rows.Scan(&outcome, &body); err != nil {
+			return "", false, err
+		}
+		if outcome != outcomeCommits {
+			continue
+		}
+		var commits []storedCommit
+		if err := json.Unmarshal([]byte(body), &commits); err != nil {
+			return "", false, err
+		}
+		if len(commits) == 0 {
+			continue
+		}
+		return commits[len(commits)-1].Hash, true, nil
+	}
+	if err := rows.Err(); err != nil {
+		return "", false, err
+	}
+	return "", false, nil
+}
+
 func openState(ctx context.Context, gitDir string) (*sql.DB, error) {
 	dir := filepath.Join(gitDir, "spor")
 	if err := os.MkdirAll(dir, 0o755); err != nil {

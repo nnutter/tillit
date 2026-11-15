@@ -16,7 +16,7 @@ import (
 	"github.com/nnutter/spor/internal/refactor"
 )
 
-const remainderSubject = "Apply the remaining submitted changes"
+const remainderSubject = "Apply the remaining added changes"
 
 func refactorSubject(item refactor.Refactoring) string {
 	text := item.Describe()

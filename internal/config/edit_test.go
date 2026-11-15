@@ -1,0 +1,156 @@
+package config_test
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/nnutter/spor/internal/config"
+)
+
+func TestShowPrintsTheMergedSettings(t *testing.T) {
+	gitDir := tempGitDir(t)
+
+	text, err := config.Show(gitDir, config.ScopeEffective)
+	require.NoError(t, err)
+	require.JSONEq(t, `{"verify":{"mode":"change"}}`, text)
+	require.Contains(t, text, "\n    \"mode\": \"change\"\n")
+
+	mode, err := config.Get(gitDir, config.ScopeEffective, "verify.mode")
+	require.NoError(t, err)
+	require.Equal(t, "change\n", mode)
+	_, err = config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.ErrorContains(t, err, "unset")
+
+	file, err := config.Show(gitDir, config.ScopeWorktree)
+	require.NoError(t, err)
+	require.JSONEq(t, `{}`, file)
+	require.Contains(t, file, "{}\n")
+	_, err = os.Stat(filepath.Join(gitDir, "spor", "config.json"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestSetReplacesOneField(t *testing.T) {
+	gitDir := tempGitDir(t)
+	require.NoError(t, config.Set(gitDir, config.ScopeGlobal, "verify.command", []string{"from-global"}))
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "verify.command", []string{"go", "test"}))
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "verify.mode", []string{"patch"}))
+
+	command, err := config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "go\ntest\n", command)
+	mode, err := config.Get(gitDir, config.ScopeEffective, "verify.mode")
+	require.NoError(t, err)
+	require.Equal(t, "patch\n", mode)
+
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "verify.command", []string{`a"b`}))
+	command, err = config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "a\"b\n", command)
+	mode, err = config.Get(gitDir, config.ScopeWorktree, "verify.mode")
+	require.NoError(t, err)
+	require.Equal(t, "patch\n", mode)
+}
+
+func TestAppendAndRemoveListValues(t *testing.T) {
+	gitDir := tempGitDir(t)
+	require.NoError(t, config.Set(gitDir, config.ScopeGlobal, "verify.command", []string{"from-global"}))
+	require.NoError(t, config.Append(gitDir, config.ScopeWorktree, "verify.command", "go"))
+	require.NoError(t, config.Append(gitDir, config.ScopeWorktree, "verify.command", "test"))
+	require.NoError(t, config.Append(gitDir, config.ScopeWorktree, "verify.command", "go"))
+
+	command, err := config.Get(gitDir, config.ScopeWorktree, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "go\ntest\ngo\n", command)
+
+	require.NoError(t, config.Remove(gitDir, config.ScopeWorktree, "verify.command", "go", true))
+	command, err = config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "test\n", command)
+
+	err = config.Remove(gitDir, config.ScopeWorktree, "verify.command", "missing", true)
+	require.ErrorContains(t, err, "match")
+	require.ErrorContains(t, err, "missing")
+	command, err = config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "test\n", command)
+
+	require.NoError(t, config.Remove(gitDir, config.ScopeWorktree, "verify.command", "test", true))
+	_, err = config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.ErrorContains(t, err, "unset")
+	command, err = config.Get(gitDir, config.ScopeWorktree, "verify.command")
+	require.NoError(t, err)
+	require.Empty(t, command)
+	file, err := config.Show(gitDir, config.ScopeWorktree)
+	require.NoError(t, err)
+	require.Contains(t, file, "\"command\": []")
+	require.NotContains(t, configText(t, gitDir, config.ScopeEffective), "from-global")
+}
+
+func TestRemoveKeyRestoresTheLowerLayer(t *testing.T) {
+	gitDir := tempGitDir(t)
+	require.NoError(t, config.Set(gitDir, config.ScopeGlobal, "verify.command", []string{"from-global"}))
+	require.NoError(t, config.Set(gitDir, config.ScopeGlobal, "verify.mode", []string{"commit"}))
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "verify.mode", []string{"patch"}))
+
+	require.NoError(t, config.Remove(gitDir, config.ScopeWorktree, "verify.mode", "", false))
+	mode, err := config.Get(gitDir, config.ScopeEffective, "verify.mode")
+	require.NoError(t, err)
+	require.Equal(t, "commit\n", mode)
+	command, err := config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "from-global\n", command)
+
+	err = config.Remove(gitDir, config.ScopeWorktree, "verify.mode", "", false)
+	require.ErrorContains(t, err, "unset")
+	err = config.Append(gitDir, config.ScopeWorktree, "verify.mode", "patch")
+	require.ErrorContains(t, err, "list")
+	err = config.Remove(gitDir, config.ScopeWorktree, "verify.mode", "commit", true)
+	require.ErrorContains(t, err, "list")
+}
+
+func TestRepositoryFileIsSeparateFromTheWorktreeFile(t *testing.T) {
+	gitDir := tempGitDir(t)
+	common := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "commondir"), []byte(common+"\n"), 0o644))
+	require.NoError(t, config.Set(gitDir, config.ScopeRepository, "verify.mode", []string{"commit"}))
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "verify.command", []string{"from-worktree"}))
+
+	mode, err := config.Get(gitDir, config.ScopeEffective, "verify.mode")
+	require.NoError(t, err)
+	require.Equal(t, "commit\n", mode)
+	command, err := config.Get(gitDir, config.ScopeEffective, "verify.command")
+	require.NoError(t, err)
+	require.Equal(t, "from-worktree\n", command)
+	_, err = config.Get(gitDir, config.ScopeRepository, "verify.command")
+	require.ErrorContains(t, err, "unset")
+	_, err = os.Stat(filepath.Join(common, "spor", "config.json"))
+	require.NoError(t, err)
+	_, err = os.Stat(filepath.Join(gitDir, "spor", "config.json"))
+	require.NoError(t, err)
+}
+
+func TestEditRejectsUnknownKeysAndModes(t *testing.T) {
+	gitDir := tempGitDir(t)
+	err := config.Set(gitDir, config.ScopeWorktree, "verify.nope", []string{"x"})
+	require.ErrorContains(t, err, "key")
+	require.ErrorContains(t, err, "nope")
+	err = config.Set(gitDir, config.ScopeWorktree, "verify.mode", []string{"nope"})
+	require.ErrorContains(t, err, "mode")
+	require.ErrorContains(t, err, "nope")
+	err = config.Set(gitDir, config.ScopeWorktree, "verify.mode", []string{"patch", "commit"})
+	require.ErrorContains(t, err, "value")
+	err = config.Set(gitDir, config.ScopeWorktree, "verify.command", nil)
+	require.ErrorContains(t, err, "value")
+	_, err = os.Stat(filepath.Join(gitDir, "spor", "config.json"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func configText(t *testing.T, gitDir string, scope config.Scope) string {
+	t.Helper()
+	text, err := config.Show(gitDir, scope)
+	require.NoError(t, err)
+	return text
+}

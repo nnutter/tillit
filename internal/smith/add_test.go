@@ -19,20 +19,20 @@ import (
 	"github.com/nnutter/spor/internal/smith"
 )
 
-func TestSubmitRenameLeavesTheUserRepoAndWritesTwoCommits(t *testing.T) {
+func TestAddRenameLeavesTheUserRepoAndWritesTwoCommits(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
 	stage(t, repo, dir, "main.go", []byte(renameAfter))
 	keep := readFile(t, filepath.Join(dir, "notes.txt"))
 	head, index := snapshot(t, repo)
 
-	result, err := smith.Submit(t.Context(), dir)
+	result, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, result.SporID)
 	require.True(t, strings.HasPrefix(result.SporID, "S"))
 	require.Len(t, result.Commits, 2)
 	require.Equal(t, "Refactor: Rename variable x to y in f", result.Commits[0].Subject)
-	require.Equal(t, "Apply the remaining submitted changes", result.Commits[1].Subject)
+	require.Equal(t, "Apply the remaining added changes", result.Commits[1].Subject)
 	require.Contains(t, smith.Format(result), "spor-id: "+result.SporID)
 	require.Contains(t, smith.Format(result), result.Ref)
 
@@ -67,11 +67,11 @@ func TestSubmitRenameLeavesTheUserRepoAndWritesTwoCommits(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestSubmitExtractWritesOneCommit(t *testing.T) {
+func TestAddExtractWritesOneCommit(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(extractBefore))
 	stage(t, repo, dir, "main.go", []byte(extractAfter))
 
-	result, err := smith.Submit(t.Context(), dir)
+	result, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Len(t, result.Commits, 1)
 	require.Equal(t, "Refactor: Extract variable sum in f", result.Commits[0].Subject)
@@ -82,11 +82,11 @@ func TestSubmitExtractWritesOneCommit(t *testing.T) {
 	require.Equal(t, extractAfter, fileText(t, commits[0], "main.go"))
 }
 
-func TestSubmitWithoutARefactorDoesNotMoveTheRef(t *testing.T) {
+func TestAddWithoutARefactorDoesNotMoveTheRef(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
 	stage(t, repo, dir, "main.go", []byte(strings.ReplaceAll(renameBefore, "1", "2")))
 
-	result, err := smith.Submit(t.Context(), dir)
+	result, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Empty(t, result.Commits)
 	require.Equal(t, "No basic refactors in the staged changes.", result.Message)
@@ -102,10 +102,10 @@ func TestSubmitWithoutARefactorDoesNotMoveTheRef(t *testing.T) {
 	require.Equal(t, result.Message, status.Message)
 }
 
-func TestSubmitWithNoStagedChanges(t *testing.T) {
+func TestAddWithNoStagedChanges(t *testing.T) {
 	_, dir := newRepo(t, "main.go", []byte(renameBefore))
 
-	result, err := smith.Submit(t.Context(), dir)
+	result, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Equal(t, "No staged changes.\n", smith.Format(result))
 
@@ -114,7 +114,93 @@ func TestSubmitWithNoStagedChanges(t *testing.T) {
 	require.Equal(t, "No submissions.\n", smith.Format(status))
 }
 
-func TestSubmitRequiresAGitUser(t *testing.T) {
+func TestResetWithNoSubmissions(t *testing.T) {
+	_, dir := newRepo(t, "main.go", []byte(renameBefore))
+
+	result, err := smith.Reset(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "No submissions.\n", smith.Format(result))
+}
+
+func TestResetUndoesLatestAdd(t *testing.T) {
+	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
+	stage(t, repo, dir, "main.go", []byte(renameAfter))
+
+	first, err := smith.Add(t.Context(), dir)
+	require.NoError(t, err)
+	require.Len(t, first.Commits, 2)
+
+	second, err := smith.Add(t.Context(), dir)
+	require.NoError(t, err)
+	require.NotEqual(t, first.Commits[0].Hash, second.Commits[0].Hash)
+
+	undone, err := smith.Reset(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, first.SporID, undone.SporID)
+	require.Equal(t, first.Commits, undone.Commits)
+	require.Equal(t, first.Ref, undone.Ref)
+
+	again := reopen(t, dir)
+	require.Equal(t, first.Commits[1].Hash, referenceHash(t, again, first.Ref))
+	_, err = again.Reference(plumbing.ReferenceName(sporIDRef(second)), true)
+	require.ErrorIs(t, err, plumbing.ErrReferenceNotFound)
+
+	status, err := smith.Status(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, first.SporID, status.SporID)
+
+	empty, err := smith.Reset(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "No submissions.\n", smith.Format(empty))
+	again = reopen(t, dir)
+	_, err = again.Reference(plumbing.ReferenceName(first.Ref), true)
+	require.ErrorIs(t, err, plumbing.ErrReferenceNotFound)
+	_, err = again.Reference(plumbing.ReferenceName(sporIDRef(first)), true)
+	require.ErrorIs(t, err, plumbing.ErrReferenceNotFound)
+}
+
+func TestLogReturnsNewestFirst(t *testing.T) {
+	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
+	stage(t, repo, dir, "main.go", []byte(renameAfter))
+
+	added, err := smith.Add(t.Context(), dir)
+	require.NoError(t, err)
+	require.Len(t, added.Commits, 2)
+
+	commits, err := smith.Log(t.Context(), dir)
+	require.NoError(t, err)
+	require.Len(t, commits, 2)
+	require.Equal(t, added.Commits[1], commits[0])
+	require.Equal(t, added.Commits[0], commits[1])
+}
+
+func TestLogWithNoCommits(t *testing.T) {
+	_, dir := newRepo(t, "main.go", []byte(renameBefore))
+
+	commits, err := smith.Log(t.Context(), dir)
+	require.NoError(t, err)
+	require.Empty(t, commits)
+}
+
+func TestLogHidesCommitsOnBranch(t *testing.T) {
+	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
+	stage(t, repo, dir, "main.go", []byte(renameAfter))
+
+	added, err := smith.Add(t.Context(), dir)
+	require.NoError(t, err)
+	require.Len(t, added.Commits, 2)
+
+	again := reopen(t, dir)
+	head, err := again.Head()
+	require.NoError(t, err)
+	require.NoError(t, again.Storer.SetReference(plumbing.NewHashReference(head.Name(), plumbing.NewHash(added.Commits[1].Hash))))
+
+	commits, err := smith.Log(t.Context(), dir)
+	require.NoError(t, err)
+	require.Empty(t, commits)
+}
+
+func TestAddRequiresAGitUser(t *testing.T) {
 	cases := []struct {
 		label   string
 		name    string
@@ -134,42 +220,42 @@ func TestSubmitRequiresAGitUser(t *testing.T) {
 			require.NoError(t, repo.SetConfig(cfg))
 			stage(t, repo, dir, "main.go", []byte(extractAfter))
 
-			_, err := smith.Submit(t.Context(), dir)
+			_, err := smith.Add(t.Context(), dir)
 			require.ErrorContains(t, err, tc.keyword)
 		})
 	}
 }
 
-func TestSubmitRequiresACommit(t *testing.T) {
+func TestAddRequiresACommit(t *testing.T) {
 	dir := t.TempDir()
 	scrubGitEnv(t)
 	_, err := git.PlainInit(dir, false)
 	require.NoError(t, err)
 
-	_, err = smith.Submit(t.Context(), dir)
+	_, err = smith.Add(t.Context(), dir)
 	require.ErrorContains(t, err, "commit")
 }
 
-func TestSubmitRejectsAMissingRepository(t *testing.T) {
+func TestAddRejectsAMissingRepository(t *testing.T) {
 	scrubGitEnv(t)
 	dir, err := os.MkdirTemp("/tmp", "spor-smith-")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
 
-	_, err = smith.Submit(t.Context(), dir)
+	_, err = smith.Add(t.Context(), dir)
 	require.ErrorContains(t, err, "repository")
 }
 
-func TestSubmitAgainStartsFromTheUserHead(t *testing.T) {
+func TestAddAgainStartsFromTheUserHead(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(extractBefore))
 	stage(t, repo, dir, "main.go", []byte(extractAfter))
 	head, index := snapshot(t, repo)
 
-	first, err := smith.Submit(t.Context(), dir)
+	first, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Len(t, first.Commits, 1)
 
-	second, err := smith.Submit(t.Context(), dir)
+	second, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Len(t, second.Commits, 1)
 	require.NotEqual(t, first.SporID, second.SporID)
@@ -196,13 +282,13 @@ func TestSubmitAgainStartsFromTheUserHead(t *testing.T) {
 	require.NotContains(t, smith.Format(status), first.SporID)
 }
 
-func TestSubmitRenamesANestedFile(t *testing.T) {
+func TestAddRenamesANestedFile(t *testing.T) {
 	after := []byte(strings.ReplaceAll(renameBefore, "x", "y"))
 	repo, dir := newRepo(t, "pkg/main.go", []byte(renameBefore))
 	stage(t, repo, dir, "pkg/main.go", after)
 	head, index := snapshot(t, repo)
 
-	result, err := smith.Submit(t.Context(), dir)
+	result, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Len(t, result.Commits, 1)
 	require.Contains(t, result.Commits[0].Subject, "x")
@@ -221,14 +307,14 @@ func TestSubmitRenamesANestedFile(t *testing.T) {
 	require.Equal(t, "spor@example.com", commits[0].Author.Email)
 }
 
-func TestSubmitFromASubdirectory(t *testing.T) {
+func TestAddFromASubdirectory(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(extractBefore))
 	stage(t, repo, dir, "main.go", []byte(extractAfter))
 	head, index := snapshot(t, repo)
 	sub := filepath.Join(dir, "pkg")
 	require.NoError(t, os.MkdirAll(sub, 0o755))
 
-	result, err := smith.Submit(t.Context(), sub)
+	result, err := smith.Add(t.Context(), sub)
 	require.NoError(t, err)
 	require.Len(t, result.Commits, 1)
 	requireUntouched(t, dir, head, index, map[string][]byte{
@@ -247,7 +333,7 @@ func TestSubmitFromASubdirectory(t *testing.T) {
 	require.Equal(t, result.Commits, status.Commits)
 }
 
-func TestSubmitKeepsAddedAndDeletedFilesOutOfTheRefactorCommit(t *testing.T) {
+func TestAddKeepsAddedAndDeletedFilesOutOfTheRefactorCommit(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
 	commitPath(t, repo, dir, "gone.txt", "gone\n")
 	stage(t, repo, dir, "main.go", []byte(renameAfter))
@@ -255,10 +341,10 @@ func TestSubmitKeepsAddedAndDeletedFilesOutOfTheRefactorCommit(t *testing.T) {
 	stage(t, repo, dir, "new.txt", []byte("new\n"))
 	head, index := snapshot(t, repo)
 
-	result, err := smith.Submit(t.Context(), dir)
+	result, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.Len(t, result.Commits, 2)
-	require.Equal(t, "Apply the remaining submitted changes", result.Commits[1].Subject)
+	require.Equal(t, "Apply the remaining added changes", result.Commits[1].Subject)
 
 	requireUntouched(t, dir, head, index, map[string][]byte{
 		"main.go":   []byte(renameAfter),
@@ -279,13 +365,13 @@ func TestSubmitKeepsAddedAndDeletedFilesOutOfTheRefactorCommit(t *testing.T) {
 	require.Equal(t, []string{"main.go", "new.txt", "notes.txt"}, commitPaths(t, commits[1]))
 }
 
-func TestSubmitRejectsUnparseableGo(t *testing.T) {
+func TestAddRejectsUnparseableGo(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
 	broken := []byte("package p\nfunc (\n")
 	stage(t, repo, dir, "main.go", broken)
 	head, index := snapshot(t, repo)
 
-	_, err := smith.Submit(t.Context(), dir)
+	_, err := smith.Add(t.Context(), dir)
 	require.ErrorContains(t, err, "main.go")
 	require.ErrorContains(t, err, "expected")
 	requireUntouched(t, dir, head, index, map[string][]byte{
@@ -299,13 +385,13 @@ func TestSubmitRejectsUnparseableGo(t *testing.T) {
 	require.Equal(t, "No submissions.\n", smith.Format(status))
 }
 
-func TestSubmitRejectsAConflictedIndex(t *testing.T) {
+func TestAddRejectsAConflictedIndex(t *testing.T) {
 	repo, dir := newRepo(t, "main.go", []byte(renameBefore))
 	stage(t, repo, dir, "main.go", []byte(renameAfter))
 	markConflict(t, repo, "main.go")
 	head, index := snapshot(t, repo)
 
-	_, err := smith.Submit(t.Context(), dir)
+	_, err := smith.Add(t.Context(), dir)
 	require.ErrorContains(t, err, "conflict")
 	require.ErrorContains(t, err, "main.go")
 	requireUntouched(t, dir, head, index, map[string][]byte{
@@ -319,7 +405,7 @@ func TestSubmitRejectsAConflictedIndex(t *testing.T) {
 	require.Equal(t, "No submissions.\n", smith.Format(status))
 }
 
-func TestSubmitInALinkedWorktreeKeepsStateThere(t *testing.T) {
+func TestAddInALinkedWorktreeKeepsStateThere(t *testing.T) {
 	scrubGitEnv(t)
 	base := t.TempDir()
 	mainDir := filepath.Join(base, "main")
@@ -338,7 +424,7 @@ func TestSubmitInALinkedWorktreeKeepsStateThere(t *testing.T) {
 	writeFile(t, filepath.Join(linkedDir, "main.go"), []byte(extractAfter))
 	runGit(t, "-C", linkedDir, "add", "main.go")
 
-	result, err := smith.Submit(t.Context(), linkedDir)
+	result, err := smith.Add(t.Context(), linkedDir)
 	require.NoError(t, err)
 	require.Len(t, result.Commits, 1)
 

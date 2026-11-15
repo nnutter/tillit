@@ -13,7 +13,7 @@ Spor will analyze the staged changes to detect and extract refactor commits.
 | User runs `spor start` |  |  | Spor spawns a daemon |
 | User makes changes | \* |  |  |
 | User stages changes | \* |  |  |
-| User runs `spor submit` | \* |  |  |
+| User runs `spor add` | \* |  |  |
 | User continues making changes | \* |  | Spor receives staged changes |
 |  |  |  | Spor analyzes staged changes and extracts 3 commits, A, B, and C, to Spor Index |
 |  |  | A | Spor checks out A to Spor Branch and begins verification |
@@ -58,10 +58,12 @@ After the second rebase, Spor's branch matches the user's.
 
 - `spor start` - Starts Spor daemon in the current Git worktree.
 - `spor status` - Displays the status of the Spor daemon and any pending changes.
-- `spor submit` - Submits the staged changes to Spor for processing.
-  (Works even if the daemon is not running, queues work for daemon.)
+- `spor add` - Adds the staged changes to Spor for processing.
+  `spor stage` is an alias for `spor add`.
+- `spor reset` - Undoes the latest `spor add`.
+- `spor log` - Shows added commits that are not yet on the user's branch with verification status.
 - `spor rebase` - Tells the daemon (Mender) to rebase into/under the User's branch/worktree.
-- `spor verify` - Manually trigger verification of the current Spor branch/worktree.
+- `spor verify` - Verifies spor commits. `--mode` overrides the configured mode for that run.
 - `spor stop` - Stops the Spor daemon.
 
 ## Change Tracking
@@ -72,7 +74,7 @@ Spor will add a Spor-Id Git commit message trailer to identify changes that were
 
 ## Daemon Components
 
-- Smith: The Smith will extract commits from the submitted changes and maintain an isolated Git Index to build commits.
+- Smith: The Smith will extract commits from the added changes and maintain an isolated Git Index to build commits.
 - Auditor: The Auditor will verify commits and make fixup commits for any that fail verification.
 - Mender: The Mender will incorporate Spor commits back into the User's branch/worktree.
 
@@ -81,12 +83,16 @@ Spor will add a Spor-Id Git commit message trailer to identify changes that were
 ### 0.1.0
 
 - Spor will automatically extract and commit basic refactor commits from your staged changes.
-- `spor submit` writes those commits and leaves the branch, index, and worktree alone.
+- `spor add` writes those commits and leaves the branch, index, and worktree alone.
 - `spor status` shows the latest submission.
 
 ### 0.2.0
 
 - Spor will automatically verify commits.
+- The verification modes are commit, patch, and change, and the default mode is change.
+- `spor add` verifies unverified commits from the oldest forward and stops at the first failure.
+- `spor verify` checks again, and `--mode` overrides the configured mode for that run.
+- `spor status` shows the verification outcome.
 
 ### 0.3.0
 
@@ -109,3 +115,28 @@ Spor would automatically extract and commit quasi-refactor commits from your sta
 Quasi-refactor commits are commits that are not strictly refactors, but are still simple enough and self-contained enough do not having a user-facing change.
 
 Spor would also provide code review and suggest commits rather than automatically making them.
+
+Tightly integrate something like hk into the verification process.
+
+## Usage
+
+Spor reads configuration from three files.
+A later file replaces only the fields it sets.
+Spor skips a file that is absent.
+The mode defaults to `change`.
+
+- Global configuration is `~/.config/spor/config.json`.
+- Repository configuration is `spor/config.json` in the Git common directory.
+- Worktree configuration is `spor/config.json` in the worktree Git directory when that path is separate from the Git common directory.
+
+`verify.command` is the program and its arguments.
+`verify.mode` is `commit`, `patch`, or `change`.
+
+```json
+{
+  "verify": {
+    "command": ["go", "test", "./..."],
+    "mode": "change"
+  }
+}
+```
