@@ -164,6 +164,8 @@ Spor will add a Spor-Id Git commit message trailer to identify changes that were
 
 ## Future Ideas
 
+Spor could ensure Red-Green for tests on feature branch.
+
 Spor would be able to chat with you wherever you work, whether that's in your IDE, in a terminal, or in an instant messenger.
 
 Spor would automatically extract and commit quasi-refactor commits from your staged changes.
