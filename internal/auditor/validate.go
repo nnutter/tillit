@@ -1,4 +1,4 @@
-// Package auditor verifies commits on the spor ref.
+// Package auditor validates commits on the spor ref.
 package auditor
 
 import (
@@ -15,27 +15,27 @@ import (
 	"github.com/nnutter/spor/internal/repository"
 )
 
-// ErrCommandNotConfigured means verification has no command to run.
-var ErrCommandNotConfigured = errors.New("verify command is not configured")
+// ErrCommandNotConfigured means validation has no command to run.
+var ErrCommandNotConfigured = errors.New("validate command is not configured")
 
-// Outcome is the verification state of one commit.
+// Outcome is the validation state of one commit.
 type Outcome struct {
 	Hash   string
 	Passed bool
 }
 
-// Result is one verification walk.
+// Result is one validation walk.
 type Result struct {
 	Mode     config.Mode
 	Outcomes []Outcome
 	Failed   bool
 }
 
-// Verify checks unverified spor commits from oldest to newest.
+// Validate checks unvalidated spor commits from oldest to newest.
 // An empty mode uses the configured mode. The walk stops at the first failure
 // that no fixup repairs.
-func Verify(ctx context.Context, repoPath string, mode config.Mode) (Result, error) {
-	repo, gitDir, cfg, mode, err := openVerify(repoPath, mode)
+func Validate(ctx context.Context, repoPath string, mode config.Mode) (Result, error) {
+	repo, gitDir, cfg, mode, err := openValidate(repoPath, mode)
 	if err != nil {
 		return Result{}, err
 	}
@@ -76,8 +76,8 @@ func Report(ctx context.Context, repoPath string) (string, error) {
 	return Format(cfg.Mode, outcomes), nil
 }
 
-// Statuses reports a verification word for each hash under the configured mode.
-// Words are passed, failed, or unverified, in the same order as hashes.
+// Statuses reports a validation word for each hash under the configured mode.
+// Words are passed, failed, or unvalidated, in the same order as hashes.
 func Statuses(ctx context.Context, repoPath string, hashes []string) ([]string, error) {
 	repo, gitDir, err := repository.Open(repoPath)
 	if err != nil {
@@ -108,7 +108,7 @@ func Statuses(ctx context.Context, repoPath string, hashes []string) ([]string, 
 			return nil, err
 		}
 		if !ok {
-			words[i] = "unverified"
+			words[i] = "unvalidated"
 			continue
 		}
 		words[i] = outcomeWord(outcome.Passed)
@@ -129,7 +129,7 @@ func Format(mode config.Mode, outcomes []Outcome) string {
 	return b.String()
 }
 
-func openVerify(repoPath string, mode config.Mode) (*git.Repository, string, config.Config, config.Mode, error) {
+func openValidate(repoPath string, mode config.Mode) (*git.Repository, string, config.Config, config.Mode, error) {
 	repo, gitDir, err := repository.Open(repoPath)
 	if err != nil {
 		return nil, "", config.Config{}, "", err
@@ -166,7 +166,7 @@ func walk(ctx context.Context, repo *git.Repository, repoPath, gitDir string, cf
 	queue := append([]*object.Commit(nil), commits...)
 	for i := 0; i < len(queue); i++ {
 		commit := queue[i]
-		outcome, stop, err := verifyCommit(ctx, db, root, gitDir, command, mode, commit)
+		outcome, stop, err := validateCommit(ctx, db, root, gitDir, command, mode, commit)
 		if err != nil {
 			return Result{}, err
 		}
@@ -275,7 +275,7 @@ func fixAttempt(ctx context.Context, repo *git.Repository, db statedb, root, git
 	if err != nil {
 		return nil, commit, err
 	}
-	outcome, _, err := verifyCommit(ctx, db, root, gitDir, command, mode, fixupCommit)
+	outcome, _, err := validateCommit(ctx, db, root, gitDir, command, mode, fixupCommit)
 	if err != nil {
 		return nil, commit, err
 	}
@@ -336,7 +336,7 @@ func hasFixupPrefix(id, target string) bool {
 	return id[:len(target)] == target
 }
 
-func verifyCommit(ctx context.Context, db statedb, root, gitDir string, command []string, mode config.Mode, commit *object.Commit) (Outcome, bool, error) {
+func validateCommit(ctx context.Context, db statedb, root, gitDir string, command []string, mode config.Mode, commit *object.Commit) (Outcome, bool, error) {
 	item, err := identify(ctx, gitDir, commit)
 	if err != nil {
 		return Outcome{}, false, err

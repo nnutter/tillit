@@ -22,17 +22,17 @@ import (
 	"github.com/nnutter/spor/internal/smith"
 )
 
-func TestVerifyChecksOutOutsideGitWorktrees(t *testing.T) {
+func TestValidateChecksOutOutsideGitWorktrees(t *testing.T) {
 	_, dir := linkedRepo(t)
 	addChange(t, dir, "a.go", pureAfter)
-	verifyPassed(t, dir)
+	validatePassed(t, dir)
 
 	checkout := sporCheckout(t, dir)
 	require.NotContains(t, filepath.ToSlash(checkout), "/.git/worktrees/")
 	require.Contains(t, filepath.ToSlash(readFile(t, filepath.Join(checkout, ".git"))), "/.git/worktrees/")
 }
 
-func TestVerifyStopsAtTheFirstFailure(t *testing.T) {
+func TestValidateStopsAtTheFirstFailure(t *testing.T) {
 	repo, dir := newRepo(t, map[string]string{
 		"a.go":      pureBefore,
 		"c.go":      pureBefore,
@@ -55,16 +55,16 @@ func TestVerifyStopsAtTheFirstFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, added.Commits, 3)
 
-	verified, err := auditor.Verify(t.Context(), dir, "")
+	validated, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
-	require.True(t, verified.Failed)
-	require.Equal(t, config.ModeChange, verified.Mode)
+	require.True(t, validated.Failed)
+	require.Equal(t, config.ModeChange, validated.Mode)
 	require.Equal(t, []auditor.Outcome{
 		{Hash: added.Commits[0].Hash, Passed: true},
 		{Hash: added.Commits[1].Hash, Passed: false},
-	}, verified.Outcomes)
+	}, validated.Outcomes)
 	require.Equal(t, []string{"a.go", "c.go"}, logLines(t, logPath))
-	prefix, err := auditor.VerifiedPrefix(t.Context(), dir)
+	prefix, err := auditor.ValidatedPrefix(t.Context(), dir)
 	require.NoError(t, err)
 	require.Equal(t, []string{added.Commits[0].Hash}, prefix)
 
@@ -79,15 +79,15 @@ func TestVerifyStopsAtTheFirstFailure(t *testing.T) {
 	requireFiles(t, dir, files)
 	require.Equal(t, added.Commits[1].Hash, worktreeHead(t, dir))
 
-	verified, err = auditor.Verify(t.Context(), dir, "")
+	validated, err = auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
-	require.True(t, verified.Failed)
+	require.True(t, validated.Failed)
 	require.Equal(t, []string{"a.go", "c.go", "c.go"}, logLines(t, logPath))
 	require.Equal(t, head, userHead(t, dir))
 	requireFiles(t, dir, files)
 }
 
-func TestVerifyUsesCommitPatchAndChange(t *testing.T) {
+func TestValidateUsesCommitPatchAndChange(t *testing.T) {
 	repo, dir := newRepo(t, map[string]string{
 		"main.go":   extractBefore,
 		"notes.txt": "keep\n",
@@ -103,32 +103,32 @@ func TestVerifyUsesCommitPatchAndChange(t *testing.T) {
 	original := loadCommit(t, dir, added.Commits[0].Hash)
 	change := trailer(t, original.Message, "Change-Id")
 
-	first, err := auditor.Verify(t.Context(), dir, "")
+	first, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
 	require.Equal(t, config.ModeChange, first.Mode)
 	require.Equal(t, []string{added.Commits[0].Hash}, logLines(t, logPath))
 
-	again, err := auditor.Verify(t.Context(), dir, "")
+	again, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
 	require.False(t, again.Failed)
 	require.Equal(t, []string{added.Commits[0].Hash}, logLines(t, logPath))
 
 	stored := reopen(t, dir)
 	sibling := writeCommit(t, stored, added.Ref, original.ParentHashes[0], original.TreeHash, commitMessage("other", "Sother", "Ibbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"))
-	patched, err := auditor.Verify(t.Context(), dir, config.ModePatch)
+	patched, err := auditor.Validate(t.Context(), dir, config.ModePatch)
 	require.NoError(t, err)
 	require.Equal(t, config.ModePatch, patched.Mode)
 	require.False(t, patched.Failed)
 	require.Equal(t, []string{added.Commits[0].Hash}, logLines(t, logPath))
 
-	byCommit, err := auditor.Verify(t.Context(), dir, config.ModeCommit)
+	byCommit, err := auditor.Validate(t.Context(), dir, config.ModeCommit)
 	require.NoError(t, err)
 	require.Equal(t, config.ModeCommit, byCommit.Mode)
 	require.Equal(t, []string{added.Commits[0].Hash, sibling.String()}, logLines(t, logPath))
 
 	tree := storeTree(t, stored, storeBlob(t, stored, []byte("package p\nfunc g() {}\n")))
 	replaced := writeCommit(t, stored, added.Ref, original.ParentHashes[0], tree, commitMessage("third", "Sthird", change))
-	skipped, err := auditor.Verify(t.Context(), dir, "")
+	skipped, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
 	require.Equal(t, config.ModeChange, skipped.Mode)
 	require.False(t, skipped.Failed)
@@ -143,7 +143,7 @@ func TestVerifyUsesCommitPatchAndChange(t *testing.T) {
 	require.Equal(t, "keep\n", readFile(t, filepath.Join(dir, "notes.txt")))
 }
 
-func TestVerifyDoesNotTreatBlankChangeIDsAsTheSame(t *testing.T) {
+func TestValidateDoesNotTreatBlankChangeIDsAsTheSame(t *testing.T) {
 	_, dir := newRepo(t, map[string]string{
 		"main.go":   "package p\nfunc f() {}\n",
 		"notes.txt": "keep\n",
@@ -161,13 +161,13 @@ func TestVerifyDoesNotTreatBlankChangeIDsAsTheSame(t *testing.T) {
 	secondTree := storeTree(t, repo, storeBlob(t, repo, []byte("package p\nfunc f() { return 1 }\n")))
 	second := writeCommit(t, repo, ref, first, secondTree, "two\n\nSpor-Id: Stwo\n")
 
-	verified, err := auditor.Verify(t.Context(), dir, config.ModeChange)
+	validated, err := auditor.Validate(t.Context(), dir, config.ModeChange)
 	require.NoError(t, err)
-	require.False(t, verified.Failed)
+	require.False(t, validated.Failed)
 	require.Equal(t, []string{first.String(), second.String()}, logLines(t, logPath))
 }
 
-func TestVerifyDoesNotTreatBlankPatchIDsAsTheSame(t *testing.T) {
+func TestValidateDoesNotTreatBlankPatchIDsAsTheSame(t *testing.T) {
 	_, dir := newRepo(t, map[string]string{
 		"main.go":   "package p\nfunc f() {}\n",
 		"notes.txt": "keep\n",
@@ -183,38 +183,38 @@ func TestVerifyDoesNotTreatBlankPatchIDsAsTheSame(t *testing.T) {
 	first := writeCommit(t, repo, ref, base.Hash, base.TreeHash, commitMessage("one", "Sone", "I1111111111111111111111111111111111111111"))
 	second := writeCommit(t, repo, ref, first, base.TreeHash, commitMessage("two", "Stwo", "I2222222222222222222222222222222222222222"))
 
-	verified, err := auditor.Verify(t.Context(), dir, config.ModePatch)
+	validated, err := auditor.Validate(t.Context(), dir, config.ModePatch)
 	require.NoError(t, err)
-	require.False(t, verified.Failed)
+	require.False(t, validated.Failed)
 	require.Equal(t, []string{first.String(), second.String()}, logLines(t, logPath))
 }
 
-func TestVerifyRequiresACommand(t *testing.T) {
+func TestValidateRequiresACommand(t *testing.T) {
 	_, dir := newRepo(t, map[string]string{"main.go": "package p\n"})
 
-	_, err := auditor.Verify(t.Context(), dir, "")
+	_, err := auditor.Validate(t.Context(), dir, "")
 	require.ErrorIs(t, err, auditor.ErrCommandNotConfigured)
 	require.ErrorContains(t, err, "command")
 }
 
-func TestVerifyRejectsAnUnknownMode(t *testing.T) {
+func TestValidateRejectsAnUnknownMode(t *testing.T) {
 	_, dir := newRepo(t, map[string]string{"main.go": "package p\n"})
 
-	_, err := auditor.Verify(t.Context(), dir, "nope")
+	_, err := auditor.Validate(t.Context(), dir, "nope")
 	require.ErrorContains(t, err, "mode")
 	require.ErrorContains(t, err, "nope")
 }
 
-func TestVerifyWithNothingToCheck(t *testing.T) {
+func TestValidateWithNothingToCheck(t *testing.T) {
 	_, dir := newRepo(t, map[string]string{"main.go": "package p\n"})
 	script, logPath := logScript(t)
 	writeConfig(t, dir, []string{"sh", script}, "")
 
-	verified, err := auditor.Verify(t.Context(), dir, "")
+	validated, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
-	require.Equal(t, config.ModeChange, verified.Mode)
-	require.Empty(t, verified.Outcomes)
-	require.False(t, verified.Failed)
+	require.Equal(t, config.ModeChange, validated.Mode)
+	require.Empty(t, validated.Outcomes)
+	require.False(t, validated.Failed)
 	require.Empty(t, logLines(t, logPath))
 
 	report, err := auditor.Report(t.Context(), dir)
@@ -222,20 +222,20 @@ func TestVerifyWithNothingToCheck(t *testing.T) {
 	require.Empty(t, report)
 }
 
-func TestVerifyReportsAMissingCommand(t *testing.T) {
+func TestValidateReportsAMissingCommand(t *testing.T) {
 	repo, dir := newRepo(t, map[string]string{
 		"main.go":   extractBefore,
 		"notes.txt": "keep\n",
 	})
 	stage(t, repo, dir, "main.go", extractAfter)
-	writeConfig(t, dir, []string{"spor-no-such-verifier"}, "")
+	writeConfig(t, dir, []string{"spor-no-such-validator"}, "")
 	added, err := smith.Add(t.Context(), dir)
 	require.NoError(t, err)
 	require.NotEmpty(t, added.Commits)
 
-	_, err = auditor.Verify(t.Context(), dir, "")
+	_, err = auditor.Validate(t.Context(), dir, "")
 	require.Error(t, err)
-	require.ErrorContains(t, err, "spor-no-such-verifier")
+	require.ErrorContains(t, err, "spor-no-such-validator")
 	require.NotErrorIs(t, err, auditor.ErrCommandNotConfigured)
 
 	report, err := auditor.Report(t.Context(), dir)
@@ -293,20 +293,20 @@ func signature() *object.Signature {
 
 func writeConfig(t *testing.T, dir string, command []string, mode string) {
 	t.Helper()
-	body, err := json.Marshal(verifyDocument{Auditor: auditorDocument{Verify: verifySettings{Command: command, Mode: mode}}})
+	body, err := json.Marshal(validateDocument{Auditor: auditorDocument{Validate: validateSettings{Command: command, Mode: mode}}})
 	require.NoError(t, err)
 	path := filepath.Join(dir, ".git", "spor", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, body, 0o644))
 }
 
-type verifyDocument struct {
+type validateDocument struct {
 	Auditor auditorDocument `json:"auditor"`
 }
 
 type auditorDocument struct {
-	Verify verifySettings `json:"verify"`
-	Fixup  fixupSettings  `json:"fixup"`
+	Validate validateSettings `json:"validate"`
+	Fixup    fixupSettings    `json:"fixup"`
 }
 
 type fixupSettings struct {
@@ -319,21 +319,21 @@ type fixupModelSettings struct {
 	Effort   string `json:"effort,omitempty"`
 }
 
-type verifySettings struct {
+type validateSettings struct {
 	Command []string `json:"command"`
 	Mode    string   `json:"mode,omitempty"`
 }
 
 func logScript(t *testing.T) (string, string) {
 	t.Helper()
-	return writeScript(t, "#!/bin/sh\ngit rev-parse HEAD >> \"$VERIFY_LOG\"\n")
+	return writeScript(t, "#!/bin/sh\ngit rev-parse HEAD >> \"$VALIDATE_LOG\"\n")
 }
 
 func failScript(t *testing.T) (string, string) {
 	t.Helper()
 	return writeScript(t, `#!/bin/sh
 names=$(git diff-tree --no-commit-id --name-only -r HEAD)
-printf '%s\n' "$names" >> "$VERIFY_LOG"
+printf '%s\n' "$names" >> "$VALIDATE_LOG"
 if [ "$names" = "c.go" ]; then
   exit 1
 fi
@@ -345,9 +345,9 @@ func writeScript(t *testing.T, body string) (string, string) {
 	t.Helper()
 	dir := t.TempDir()
 	logPath := filepath.Join(dir, "log")
-	script := filepath.Join(dir, "verify.sh")
+	script := filepath.Join(dir, "validate.sh")
 	require.NoError(t, os.WriteFile(script, []byte(body), 0o755))
-	t.Setenv("VERIFY_LOG", logPath)
+	t.Setenv("VALIDATE_LOG", logPath)
 	return script, logPath
 }
 

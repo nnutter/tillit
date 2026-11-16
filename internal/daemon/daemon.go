@@ -34,9 +34,9 @@ type kindAdd struct{}
 
 func (kindAdd) sealedKind() {}
 
-type kindVerify struct{}
+type kindValidate struct{}
 
-func (kindVerify) sealedKind() {}
+func (kindValidate) sealedKind() {}
 
 type kindRebase struct{}
 
@@ -44,9 +44,9 @@ func (kindRebase) sealedKind() {}
 
 // Kinds in dispatch order.
 var (
-	KindAdd    Kind = kindAdd{}
-	KindVerify Kind = kindVerify{}
-	KindRebase Kind = kindRebase{}
+	KindAdd      Kind = kindAdd{}
+	KindValidate Kind = kindValidate{}
+	KindRebase   Kind = kindRebase{}
 )
 
 type request struct {
@@ -61,14 +61,14 @@ func EnqueueAdd(ctx context.Context, repoPath string) error {
 	return enqueue(ctx, repoPath, KindAdd, "")
 }
 
-// EnqueueVerify records one verify request for the daemon.
-func EnqueueVerify(ctx context.Context, repoPath, mode string) error {
+// EnqueueValidate records one validate request for the daemon.
+func EnqueueValidate(ctx context.Context, repoPath, mode string) error {
 	if mode != "" {
 		if _, err := config.ParseMode(mode); err != nil {
 			return err
 		}
 	}
-	return enqueue(ctx, repoPath, KindVerify, mode)
+	return enqueue(ctx, repoPath, KindValidate, mode)
 }
 
 func enqueue(ctx context.Context, repoPath string, kind Kind, mode string) error {
@@ -161,8 +161,8 @@ func dispatch(ctx context.Context, repoPath string, item request) error {
 	case kindRebase:
 		_, err := mender.Rebase(ctx, repoPath, item.branch)
 		return err
-	case kindVerify:
-		_, err := auditor.Verify(ctx, repoPath, config.Mode(item.mode))
+	case kindValidate:
+		_, err := auditor.Validate(ctx, repoPath, config.Mode(item.mode))
 		if errors.Is(err, auditor.ErrCommandNotConfigured) {
 			return nil
 		}
@@ -176,7 +176,7 @@ func dispatchAdd(ctx context.Context, repoPath string) error {
 	if _, err := smith.Add(ctx, repoPath); err != nil {
 		return err
 	}
-	_, err := auditor.Verify(ctx, repoPath, "")
+	_, err := auditor.Validate(ctx, repoPath, "")
 	if errors.Is(err, auditor.ErrCommandNotConfigured) {
 		return nil
 	}
@@ -237,6 +237,10 @@ func openState(ctx context.Context, gitDir string) (*sql.DB, error) {
 		_ = db.Close()
 		return nil, err
 	}
+	if _, err := db.ExecContext(ctx, `UPDATE request SET kind = 'validate' WHERE kind = 'verify'`); err != nil {
+		_ = db.Close()
+		return nil, fmt.Errorf("migrate validation requests: %w", err)
+	}
 	return db, nil
 }
 
@@ -285,7 +289,7 @@ func createRequestTable(ctx context.Context, db *sql.DB) error {
 	return nil
 }
 
-// WorkError reports the latest completed add or verify failure, if any.
+// WorkError reports the latest completed add or validate failure, if any.
 func WorkError(ctx context.Context, repoPath string) (string, error) {
 	repo, gitDir, err := repository.Open(repoPath)
 	if err != nil {
@@ -298,7 +302,7 @@ func WorkError(ctx context.Context, repoPath string) (string, error) {
 	}
 	defer func() { _ = db.Close() }()
 	var failures []string
-	for _, kind := range []string{"add", "verify"} {
+	for _, kind := range []string{"add", "validate"} {
 		failure, err := latestWorkError(ctx, db, kind)
 		if err != nil {
 			return "", err
@@ -353,8 +357,8 @@ func kindName(kind Kind) string {
 	switch kind.(type) {
 	case kindAdd:
 		return "add"
-	case kindVerify:
-		return "verify"
+	case kindValidate:
+		return "validate"
 	case kindRebase:
 		return "rebase"
 	default:
@@ -366,8 +370,8 @@ func parseKind(value string) (Kind, error) {
 	switch value {
 	case "add":
 		return KindAdd, nil
-	case "verify":
-		return KindVerify, nil
+	case "validate":
+		return KindValidate, nil
 	case "rebase":
 		return KindRebase, nil
 	default:

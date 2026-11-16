@@ -15,26 +15,26 @@ import (
 	"github.com/nnutter/spor/internal/smith"
 )
 
-func TestVerifyFollowsMiseTrust(t *testing.T) {
+func TestValidateFollowsMiseTrust(t *testing.T) {
 	unsetCI(t)
 	_, dir := linkedRepo(t)
 	trustMise(t, dir)
 	addChange(t, dir, "a.go", pureAfter)
-	verifyPassed(t, dir)
+	validatePassed(t, dir)
 	require.Equal(t, "trusted", miseTrustWord(t, sporCheckout(t, dir)))
 
 	untrustMise(t, dir)
 	addChange(t, dir, "b.go", extractAfter)
-	verifyPassed(t, dir)
+	validatePassed(t, dir)
 	require.Equal(t, "untrusted", miseTrustWord(t, sporCheckout(t, dir)))
 }
 
-func TestVerifyFollowsAnIgnoredMiseConfig(t *testing.T) {
+func TestValidateFollowsAnIgnoredMiseConfig(t *testing.T) {
 	unsetCI(t)
 	_, dir := linkedRepo(t)
 	ignoreMise(t, dir)
 	addChange(t, dir, "a.go", pureAfter)
-	verifyPassed(t, dir)
+	validatePassed(t, dir)
 
 	// mise run trusts an untrusted config. An ignored one stays untrusted.
 	spor := sporCheckout(t, dir)
@@ -67,18 +67,18 @@ func addChange(t *testing.T, dir, name, body string) {
 	require.NotEmpty(t, added.Commits)
 }
 
-func verifyPassed(t *testing.T, dir string) {
+func validatePassed(t *testing.T, dir string) {
 	t.Helper()
-	verified, err := auditor.Verify(t.Context(), dir, "")
+	validated, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
-	require.False(t, verified.Failed)
-	require.NotEmpty(t, verified.Outcomes)
+	require.False(t, validated.Failed)
+	require.NotEmpty(t, validated.Outcomes)
 }
 
 func writeWorktreeConfig(t *testing.T, dir string, command []string) {
 	t.Helper()
 	gitDir := strings.TrimSpace(runGit(t, dir, "rev-parse", "--absolute-git-dir"))
-	body, err := json.Marshal(verifyDocument{Auditor: auditorDocument{Verify: verifySettings{Command: command}}})
+	body, err := json.Marshal(validateDocument{Auditor: auditorDocument{Validate: validateSettings{Command: command}}})
 	require.NoError(t, err)
 	path := filepath.Join(gitDir, "spor", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))

@@ -1,4 +1,4 @@
-package verify
+package validate
 
 import (
 	"fmt"
@@ -9,15 +9,15 @@ import (
 	"github.com/nnutter/spor/internal/daemon"
 )
 
-// New builds the verify command.
+// New builds the validate command.
 func New() *cobra.Command {
 	command := &cobra.Command{
-		Use:   "verify",
-		Short: "Verify spor commits",
+		Use:   "validate",
+		Short: "Validate spor commits",
 		Args:  cobra.NoArgs,
 		RunE:  run,
 	}
-	command.Flags().String("mode", "", "verification mode for this run: commit, patch, or change")
+	command.Flags().String("mode", "", "validation mode for this run: commit, patch, or change")
 	return command
 }
 
@@ -30,7 +30,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	if err := daemon.EnqueueVerify(cmd.Context(), repo, string(mode)); err != nil {
+	if err := daemon.EnqueueValidate(cmd.Context(), repo, string(mode)); err != nil {
 		return err
 	}
 	_, err = fmt.Fprint(cmd.OutOrStdout(), "Queued.\n")

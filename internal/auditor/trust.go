@@ -11,7 +11,7 @@ import (
 )
 
 // syncMiseTrust copies the mise trust decision for source onto dest.
-// Mise records that decision on one checkout directory. Spor verifies in its
+// Mise records that decision on one checkout directory. Spor validates in its
 // own checkout, so the decision has to be copied there before mise runs.
 func syncMiseTrust(ctx context.Context, source, dest string) error {
 	if _, err := exec.LookPath("mise"); err != nil {

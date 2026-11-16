@@ -77,7 +77,7 @@ func Append(gitDir string, scope Scope, key, value string) error {
 	return update(gitDir, scope, func(doc *document) error {
 		current := commandOf(doc)
 		current = append(current, value)
-		ensureVerify(doc).Command = &current
+		ensureValidate(doc).Command = &current
 		return nil
 	})
 }
@@ -113,6 +113,9 @@ const (
 )
 
 func kindOf(key string) (valueKind, error) {
+	if key == "auditor.verify" || strings.HasPrefix(key, "auditor.verify.") {
+		return 0, fmt.Errorf("config key %q was renamed; use auditor.validate instead of auditor.verify", key)
+	}
 	field, ok := fieldByKey(key)
 	if !ok {
 		return 0, fmt.Errorf("unknown config key %q", key)
@@ -159,10 +162,10 @@ func fixupModelIsSet(model *fixupModel) bool {
 }
 
 func effectiveDocument(cfg Config) document {
-	verify := &verifyDocument{Mode: string(cfg.Mode)}
+	validate := &validateDocument{Mode: string(cfg.Mode)}
 	if len(cfg.Command) > 0 {
 		command := slices.Clone(cfg.Command)
-		verify.Command = &command
+		validate.Command = &command
 	}
 	model := &fixupModel{}
 	if cfg.Auditor.Provider != "" {
@@ -182,7 +185,7 @@ func effectiveDocument(cfg Config) document {
 	if cfg.Mender.Thinking != nil {
 		mender.Effort = cfg.Mender.Thinking.String()
 	}
-	return document{Auditor: &auditorDocument{Verify: verify, Fixup: fixup}, Mender: &menderDocument{Conflict: &fixupDocument{Model: mender}}}
+	return document{Auditor: &auditorDocument{Validate: validate, Fixup: fixup}, Mender: &menderDocument{Conflict: &fixupDocument{Model: mender}}}
 }
 
 func menderModel(doc document) *fixupModel {
@@ -214,6 +217,15 @@ func readDocument(path string) (document, error) {
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return document{}, fmt.Errorf("read spor config %s: %w", path, err)
+	}
+	var envelope struct {
+		Auditor map[string]jsontext.Value `json:"auditor"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return document{}, fmt.Errorf("read spor config %s: %w", path, err)
+	}
+	if _, ok := envelope.Auditor["verify"]; ok {
+		return document{}, fmt.Errorf("read spor config %s: auditor.verify was renamed; move its settings to auditor.validate", path)
 	}
 	return doc, nil
 }
@@ -268,7 +280,7 @@ func assign(doc *document, kind valueKind, values []string) error {
 		return assignMode(doc, values)
 	case kindCommand:
 		command := slices.Clone(values)
-		ensureVerify(doc).Command = &command
+		ensureValidate(doc).Command = &command
 		return nil
 	case kindFixupProvider:
 		return assignSingle(doc, values, func(doc *document, value string) {
@@ -303,7 +315,7 @@ func assignMode(doc *document, values []string) error {
 	if err != nil {
 		return err
 	}
-	ensureVerify(doc).Mode = string(mode)
+	ensureValidate(doc).Mode = string(mode)
 	return nil
 }
 
@@ -311,8 +323,8 @@ func deleteKey(doc *document, kind valueKind) error {
 	if err := clearKey(doc, kind); err != nil {
 		return err
 	}
-	if auditorVerifyEmpty(doc) {
-		doc.Auditor.Verify = nil
+	if auditorValidateEmpty(doc) {
+		doc.Auditor.Validate = nil
 	}
 	if fixupEmpty(doc) {
 		doc.Auditor.Fixup = nil
@@ -341,26 +353,26 @@ func clearKey(doc *document, kind valueKind) error {
 }
 
 func clearMode(doc *document) error {
-	verify := docAuditorVerify(*doc)
-	if verify == nil {
+	validate := docAuditorValidate(*doc)
+	if validate == nil {
 		return unset(kindName(kindMode))
 	}
-	if verify.Mode == "" {
+	if validate.Mode == "" {
 		return unset(kindName(kindMode))
 	}
-	verify.Mode = ""
+	validate.Mode = ""
 	return nil
 }
 
 func clearCommand(doc *document) error {
-	verify := docAuditorVerify(*doc)
-	if verify == nil {
+	validate := docAuditorValidate(*doc)
+	if validate == nil {
 		return unset(kindName(kindCommand))
 	}
-	if verify.Command == nil {
+	if validate.Command == nil {
 		return unset(kindName(kindCommand))
 	}
-	verify.Command = nil
+	validate.Command = nil
 	return nil
 }
 
@@ -401,18 +413,18 @@ func clearEffort(doc *document) error {
 }
 
 func deleteValue(doc *document, key, value string) error {
-	verify := docAuditorVerify(*doc)
-	if verify == nil {
+	validate := docAuditorValidate(*doc)
+	if validate == nil {
 		return unset(key)
 	}
-	if verify.Command == nil {
+	if validate.Command == nil {
 		return unset(key)
 	}
-	next, found := withoutValue(*verify.Command, value)
+	next, found := withoutValue(*validate.Command, value)
 	if !found {
 		return fmt.Errorf("%q does not match a value of %s", value, key)
 	}
-	verify.Command = &next
+	validate.Command = &next
 	return nil
 }
 
@@ -430,25 +442,25 @@ func withoutValue(values []string, value string) ([]string, bool) {
 }
 
 func commandOf(doc *document) []string {
-	verify := docAuditorVerify(*doc)
-	if verify == nil {
+	validate := docAuditorValidate(*doc)
+	if validate == nil {
 		return nil
 	}
-	if verify.Command == nil {
+	if validate.Command == nil {
 		return nil
 	}
-	return slices.Clone(*verify.Command)
+	return slices.Clone(*validate.Command)
 }
 
-func auditorVerifyEmpty(doc *document) bool {
-	verify := docAuditorVerify(*doc)
-	if verify == nil {
+func auditorValidateEmpty(doc *document) bool {
+	validate := docAuditorValidate(*doc)
+	if validate == nil {
 		return true
 	}
-	if verify.Mode != "" {
+	if validate.Mode != "" {
 		return false
 	}
-	return verify.Command == nil
+	return validate.Command == nil
 }
 
 func fixupEmpty(doc *document) bool {
@@ -478,20 +490,20 @@ func auditorEmpty(doc *document) bool {
 	if doc.Auditor == nil {
 		return true
 	}
-	if !auditorVerifyEmpty(doc) {
+	if !auditorValidateEmpty(doc) {
 		return false
 	}
 	return fixupEmpty(doc)
 }
 
-func ensureVerify(doc *document) *verifyDocument {
+func ensureValidate(doc *document) *validateDocument {
 	if doc.Auditor == nil {
 		doc.Auditor = &auditorDocument{}
 	}
-	if doc.Auditor.Verify == nil {
-		doc.Auditor.Verify = &verifyDocument{}
+	if doc.Auditor.Validate == nil {
+		doc.Auditor.Validate = &validateDocument{}
 	}
-	return doc.Auditor.Verify
+	return doc.Auditor.Validate
 }
 
 func ensureFixupModel(doc *document) *fixupModel {
@@ -556,25 +568,25 @@ func formatFixupString(doc document, key string) (string, error) {
 }
 
 func formatMode(doc document) (string, error) {
-	verify := docAuditorVerify(doc)
-	if verify == nil {
+	validate := docAuditorValidate(doc)
+	if validate == nil {
 		return "", unset(kindName(kindMode))
 	}
-	if verify.Mode == "" {
+	if validate.Mode == "" {
 		return "", unset(kindName(kindMode))
 	}
-	return verify.Mode + "\n", nil
+	return validate.Mode + "\n", nil
 }
 
 func formatCommand(doc document) (string, error) {
-	verify := docAuditorVerify(doc)
-	if verify == nil {
+	validate := docAuditorValidate(doc)
+	if validate == nil {
 		return "", unset(kindName(kindCommand))
 	}
-	if verify.Command == nil {
+	if validate.Command == nil {
 		return "", unset(kindName(kindCommand))
 	}
-	return joinLines(*verify.Command), nil
+	return joinLines(*validate.Command), nil
 }
 
 func joinLines(values []string) string {

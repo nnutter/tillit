@@ -63,7 +63,7 @@ func runAgent(ctx context.Context, gitDir string, auditorCfg config.Auditor, tar
 		return OutcomeFailed, err
 	}
 	thinking := thinkingName(auditorCfg)
-	prompt := fmt.Sprintf("Fix the failing commit %s (%s) so the verification command passes. Verification failed on this commit. Fix the code in the current checkout and stop; do not commit.", target, subject)
+	prompt := fmt.Sprintf("Fix the failing commit %s (%s) so the validation command passes. Validation failed on this commit. Fix the code in the current checkout and stop; do not commit.", target, subject)
 	args := []string{"-p", "--provider", auditorCfg.Provider, "--model", auditorCfg.Model, "--thinking", thinking, "--", prompt}
 	if err := runCaptured(ctx, dest, "pi", args...); err != nil {
 		return OutcomeFailed, fmt.Errorf("run pi: %w", err)

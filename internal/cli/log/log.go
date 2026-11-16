@@ -14,7 +14,7 @@ import (
 func New() *cobra.Command {
 	return &cobra.Command{
 		Use:   "log",
-		Short: "Show added commits with verification status",
+		Short: "Show added commits with validation status",
 		Args:  cobra.NoArgs,
 		RunE:  run,
 	}

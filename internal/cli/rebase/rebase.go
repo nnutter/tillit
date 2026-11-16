@@ -1,4 +1,4 @@
-// Package rebase queues integration of verified commits.
+// Package rebase queues integration of validated commits.
 package rebase
 
 import (
@@ -11,7 +11,7 @@ import (
 
 // New builds the rebase command.
 func New() *cobra.Command {
-	return &cobra.Command{Use: "rebase", Short: "Queue integration of verified commits", Args: cobra.NoArgs, RunE: run}
+	return &cobra.Command{Use: "rebase", Short: "Queue integration of validated commits", Args: cobra.NoArgs, RunE: run}
 }
 
 func run(cmd *cobra.Command, _ []string) error {

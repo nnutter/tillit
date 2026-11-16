@@ -21,12 +21,9 @@ The identity that decides whether a commit, patch, or change has already passed 
 *Avoid*: Level
 
 **Validation**:
-Empirical confidence that a refactor preserves behavior because existing tests still pass.
+Spor's recorded result of running a configured operational check on a commit under a mode.
+Passing tests can provide empirical confidence that a refactor preserves behavior, but a passing check is not semantic verification.
 
 **Verification**:
 Conditional formal confidence that a refactor preserves behavior because checked language-semantic conditions imply behavior preservation under stated assumptions.
 *Avoid*: Review
-
-**Operational verification**:
-Spor's recorded result of running its configured check on a commit under a mode.
-A successful result does not itself claim formal verification.

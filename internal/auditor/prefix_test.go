@@ -13,7 +13,7 @@ import (
 	"github.com/nnutter/spor/internal/repository"
 )
 
-func TestVerifiedPrefixIncludesRepairedStacksOnly(t *testing.T) {
+func TestValidatedPrefixIncludesRepairedStacksOnly(t *testing.T) {
 	_, dir := newRepo(t, map[string]string{"main.go": "package p\n"})
 	repo := reopen(t, dir)
 	head, err := repo.Head()
@@ -36,7 +36,7 @@ func TestVerifiedPrefixIncludesRepairedStacksOnly(t *testing.T) {
 	b := makeCommit(af2, "B", "IB", "")
 	c := makeCommit(b, "C", "IC", "")
 	cf := makeCommit(c, "C fixup", "ICF", "IC-1")
-	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "auditor.verify.mode", []string{"commit"}))
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "auditor.validate.mode", []string{"commit"}))
 	db, err := sql.Open("sqlite", "file:"+filepath.Join(gitDir, "spor", "state.db"))
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
@@ -49,12 +49,15 @@ func TestVerifiedPrefixIncludesRepairedStacksOnly(t *testing.T) {
 		_, err := db.Exec(`INSERT INTO verification VALUES (?, '', '', ?, '1')`, item.hash, item.passed)
 		require.NoError(t, err)
 	}
-	prefix, err := auditor.VerifiedPrefix(t.Context(), dir)
+	prefix, err := auditor.ValidatedPrefix(t.Context(), dir)
 	require.NoError(t, err)
 	require.Equal(t, []string{a, af, af2, b}, prefix)
-	_, err = db.Exec(`INSERT INTO verification VALUES (?, '', '', 1, '2')`, cf)
+	var legacy int
+	require.NoError(t, db.QueryRow(`SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'verification'`).Scan(&legacy))
+	require.Zero(t, legacy)
+	_, err = db.Exec(`INSERT INTO validation VALUES (?, '', '', 1, '2')`, cf)
 	require.NoError(t, err)
-	prefix, err = auditor.VerifiedPrefix(t.Context(), dir)
+	prefix, err = auditor.ValidatedPrefix(t.Context(), dir)
 	require.NoError(t, err)
 	require.Equal(t, []string{a, af, af2, b, c, cf}, prefix)
 }

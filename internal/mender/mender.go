@@ -1,4 +1,4 @@
-// Package mender incorporates verified Spor commits into the user's branch.
+// Package mender incorporates validated Spor commits into the user's branch.
 package mender
 
 import (
@@ -16,7 +16,7 @@ import (
 	"github.com/nnutter/spor/internal/repository"
 )
 
-// Rebase prepares verified commits in an isolated worktree and publishes them
+// Rebase prepares validated commits in an isolated worktree and publishes them
 // only if the requested branch and its worktree are still unchanged.
 func Rebase(ctx context.Context, repoPath, branch string) (string, error) {
 	if !strings.HasPrefix(branch, "refs/heads/") {
@@ -65,7 +65,7 @@ func prepareOperation(ctx context.Context, repoPath, gitDir, branch string, db *
 		return "", err
 	}
 	if len(prefix) == 0 {
-		return "No verified commits to integrate.", nil
+		return "No validated commits to integrate.", nil
 	}
 	oldTip, err := git(ctx, repoPath, "rev-parse", repository.HeadRef(gitDir))
 	if err != nil {
@@ -181,7 +181,7 @@ func recoverOperation(ctx context.Context, dir, gitDir string, db *sql.DB, op op
 	if err := reconcileOperation(ctx, dir, db, op, ref, tip); err != nil {
 		return "", err
 	}
-	return "Integrated verified commits.", nil
+	return "Integrated validated commits.", nil
 }
 
 func reconcileOperation(ctx context.Context, dir string, db *sql.DB, op operation, ref, tip string) error {
@@ -214,7 +214,7 @@ func publishPrefix(ctx context.Context, dir string, op operation, head, tip stri
 		return err
 	}
 	if _, err := git(ctx, dir, "merge", "--ff-only", op.prefix); err != nil {
-		return fmt.Errorf("publish verified commits: %w", err)
+		return fmt.Errorf("publish validated commits: %w", err)
 	}
 	return nil
 }

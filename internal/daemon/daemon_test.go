@@ -1,6 +1,7 @@
 package daemon_test
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -62,9 +63,25 @@ func TestRebaseFailureIsVisible(t *testing.T) {
 	require.Contains(t, outcome, "clean worktree")
 }
 
-func TestEnqueueVerifyRejectsUnknownMode(t *testing.T) {
+func TestLegacyQueuedVerificationIsProcessedAsValidation(t *testing.T) {
 	dir := newRepo(t)
-	require.ErrorContains(t, daemon.EnqueueVerify(t.Context(), dir, "nope"), "nope")
+	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, ".git", "spor", "state.db"))
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+	_, err = db.Exec(`UPDATE request SET kind = 'verify'`)
+	require.NoError(t, err)
+	processed, err := daemon.ProcessPending(t.Context(), dir)
+	require.NoError(t, err)
+	require.True(t, processed)
+	var kind string
+	require.NoError(t, db.QueryRow(`SELECT kind FROM request`).Scan(&kind))
+	require.Equal(t, "validate", kind)
+}
+
+func TestEnqueueValidateRejectsUnknownMode(t *testing.T) {
+	dir := newRepo(t)
+	require.ErrorContains(t, daemon.EnqueueValidate(t.Context(), dir, "nope"), "nope")
 }
 
 const beforeFile = `package p

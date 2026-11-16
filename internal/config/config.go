@@ -10,7 +10,7 @@ import (
 	"github.com/nnutter/spor/internal/repository"
 )
 
-// Mode selects which recorded identity counts as already verified.
+// Mode selects which recorded identity counts as already validated.
 type Mode string
 
 const (
@@ -26,7 +26,7 @@ type Auditor struct {
 	Thinking Thinking
 }
 
-// Config is the verification settings for one worktree.
+// Config is the validation settings for one worktree.
 type Config struct {
 	Command []string
 	Mode    Mode
@@ -43,15 +43,15 @@ type menderDocument struct {
 	Conflict *fixupDocument `json:"conflict,omitempty"`
 }
 
-type verifyDocument struct {
+type validateDocument struct {
 	// An empty command is stored so this file clears commands inherited from an earlier file.
 	Command *[]string `json:"command,omitzero"`
 	Mode    string    `json:"mode,omitempty"`
 }
 
 type auditorDocument struct {
-	Verify *verifyDocument `json:"verify,omitempty"`
-	Fixup  *fixupDocument  `json:"fixup,omitempty"`
+	Validate *validateDocument `json:"validate,omitempty"`
+	Fixup    *fixupDocument    `json:"fixup,omitempty"`
 }
 
 type fixupDocument struct {
@@ -103,7 +103,7 @@ func ParseMode(value string) (Mode, error) {
 	case ModeCommit, ModePatch, ModeChange:
 		return Mode(value), nil
 	default:
-		return "", fmt.Errorf("verify mode %q is not commit, patch, or change", value)
+		return "", fmt.Errorf("validate mode %q is not commit, patch, or change", value)
 	}
 }
 
@@ -112,7 +112,7 @@ func apply(cfg Config, path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if err := applyVerify(&cfg, doc); err != nil {
+	if err := applyValidate(&cfg, doc); err != nil {
 		return Config{}, err
 	}
 	if err := applyAuditor(&cfg, doc); err != nil {
@@ -124,18 +124,18 @@ func apply(cfg Config, path string) (Config, error) {
 	return cfg, nil
 }
 
-func applyVerify(cfg *Config, doc document) error {
-	verify := docAuditorVerify(doc)
-	if verify == nil {
+func applyValidate(cfg *Config, doc document) error {
+	validate := docAuditorValidate(doc)
+	if validate == nil {
 		return nil
 	}
-	if verify.Command != nil {
-		cfg.Command = slices.Clone(*verify.Command)
+	if validate.Command != nil {
+		cfg.Command = slices.Clone(*validate.Command)
 	}
-	if verify.Mode == "" {
+	if validate.Mode == "" {
 		return nil
 	}
-	mode, err := ParseMode(verify.Mode)
+	mode, err := ParseMode(validate.Mode)
 	if err != nil {
 		return err
 	}
@@ -168,11 +168,11 @@ func applyModel(target *Auditor, model *fixupModel) error {
 	return nil
 }
 
-func docAuditorVerify(doc document) *verifyDocument {
+func docAuditorValidate(doc document) *validateDocument {
 	if doc.Auditor == nil {
 		return nil
 	}
-	return doc.Auditor.Verify
+	return doc.Auditor.Validate
 }
 
 func docFixupModel(doc document) *fixupModel {

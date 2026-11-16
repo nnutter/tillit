@@ -7,14 +7,14 @@ import (
 	"github.com/nnutter/spor/internal/repository"
 )
 
-// VerifiedPrefix returns the longest prefix of complete, verified change stacks.
-// A passing fixup verifies the preceding failed commit in its stack.
-func VerifiedPrefix(ctx context.Context, repoPath string) ([]string, error) {
+// ValidatedPrefix returns the longest prefix of complete, validated change stacks.
+// A passing fixup validates the preceding failed commit in its stack.
+func ValidatedPrefix(ctx context.Context, repoPath string) ([]string, error) {
 	prefix, _, err := Pending(ctx, repoPath)
 	return prefix, err
 }
 
-// Pending returns the verified prefix and all pending Spor commits in order.
+// Pending returns the validated prefix and all pending Spor commits in order.
 func Pending(ctx context.Context, repoPath string) ([]string, []string, error) {
 	repo, gitDir, err := repository.Open(repoPath)
 	if err != nil {

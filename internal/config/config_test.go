@@ -20,10 +20,10 @@ func TestLoadDefaultsToChange(t *testing.T) {
 func TestLoadLaterFileReplacesOnlyTheFieldsItSets(t *testing.T) {
 	gitDir := tempGitDir(t)
 	writeConfig(t, filepath.Join(os.Getenv("HOME"), ".config", "spor", "config.json"), `{
-		"auditor": {"verify": {"command": ["go", "test", "./..."], "mode": "commit"}}
+		"auditor": {"validate": {"command": ["go", "test", "./..."], "mode": "commit"}}
 	}`)
 	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
-		"auditor": {"verify": {"mode": "patch"}}
+		"auditor": {"validate": {"mode": "patch"}}
 	}`)
 
 	cfg := load(t, gitDir)
@@ -36,10 +36,10 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 	common := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "commondir"), []byte(common+"\n"), 0o644))
 	writeConfig(t, filepath.Join(common, "spor", "config.json"), `{
-		"auditor": {"verify": {"command": ["from-common"], "mode": "commit"}}
+		"auditor": {"validate": {"command": ["from-common"], "mode": "commit"}}
 	}`)
 	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
-		"auditor": {"verify": {"command": ["from-worktree"]}}
+		"auditor": {"validate": {"command": ["from-worktree"]}}
 	}`)
 
 	cfg := load(t, gitDir)
@@ -47,10 +47,24 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 	require.Equal(t, config.ModeCommit, cfg.Mode)
 }
 
+func TestLoadRejectsLegacyVerificationSettings(t *testing.T) {
+	gitDir := tempGitDir(t)
+	path := filepath.Join(gitDir, "spor", "config.json")
+	writeConfig(t, path, `{"auditor":{"verify":{"command":["true"]},"validate":{"mode":"commit"}}}`)
+	_, err := config.Load(gitDir)
+	require.ErrorContains(t, err, path)
+	require.ErrorContains(t, err, "auditor.verify")
+	require.ErrorContains(t, err, "auditor.validate")
+	_, err = config.Show(gitDir, config.ScopeWorktree)
+	require.ErrorContains(t, err, "auditor.validate")
+	err = config.Set(gitDir, config.ScopeWorktree, "auditor.validate.mode", []string{"patch"})
+	require.ErrorContains(t, err, "auditor.verify")
+}
+
 func TestLoadRejectsAnUnknownMode(t *testing.T) {
 	gitDir := tempGitDir(t)
 	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
-		"auditor": {"verify": {"mode": "nope"}}
+		"auditor": {"validate": {"mode": "nope"}}
 	}`)
 	_, err := config.Load(gitDir)
 	require.ErrorContains(t, err, "mode")

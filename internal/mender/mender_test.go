@@ -17,7 +17,7 @@ import (
 	"github.com/nnutter/spor/internal/smith"
 )
 
-func TestIntegratesVerifiedPrefixThenPreservesUserCommit(t *testing.T) {
+func TestIntegratesValidatedPrefixThenPreservesUserCommit(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"} {
 		t.Setenv(key, "")
@@ -40,8 +40,8 @@ func TestIntegratesVerifiedPrefixThenPreservesUserCommit(t *testing.T) {
 	git(t, dir, "update-ref", repository.HeadRef(gitDir), "HEAD")
 	git(t, dir, "checkout", "user")
 	require.Equal(t, base, git(t, dir, "rev-parse", "HEAD"))
-	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "auditor.verify.command", []string{"sh", "-c", "test ! -f C"}))
-	result, err := auditor.Verify(t.Context(), dir, "")
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "auditor.validate.command", []string{"sh", "-c", "test ! -f C"}))
+	result, err := auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
 	require.True(t, result.Failed)
 	gitPath := filepath.Join(git(t, dir, "--exec-path"), "git")
@@ -58,7 +58,7 @@ func TestIntegratesVerifiedPrefixThenPreservesUserCommit(t *testing.T) {
 	require.ErrorContains(t, err, "pending rebase")
 	_, err = smith.Reset(t.Context(), dir)
 	require.ErrorContains(t, err, "pending rebase")
-	_, err = auditor.Verify(t.Context(), dir, "")
+	_, err = auditor.Validate(t.Context(), dir, "")
 	require.ErrorContains(t, err, "pending rebase")
 	_, err = mender.Rebase(t.Context(), dir, "refs/heads/user")
 	require.NoError(t, err)
@@ -78,8 +78,8 @@ func TestIntegratesVerifiedPrefixThenPreservesUserCommit(t *testing.T) {
 	write(t, dir, "D", "D\n")
 	git(t, dir, "add", "D")
 	git(t, dir, "commit", "-m", "D")
-	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "auditor.verify.command", []string{"sh", "-c", "true"}))
-	result, err = auditor.Verify(t.Context(), dir, "")
+	require.NoError(t, config.Set(gitDir, config.ScopeWorktree, "auditor.validate.command", []string{"sh", "-c", "true"}))
+	result, err = auditor.Validate(t.Context(), dir, "")
 	require.NoError(t, err)
 	require.False(t, result.Failed)
 	_, err = mender.Rebase(t.Context(), dir, "refs/heads/user")

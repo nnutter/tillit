@@ -31,16 +31,35 @@ func openState(ctx context.Context, gitDir string) (statedb, error) {
 		_ = db.Close()
 		return statedb{}, err
 	}
-	if err := createVerificationTable(ctx, db); err != nil {
+	if err := createValidationTable(ctx, db); err != nil {
 		_ = db.Close()
 		return statedb{}, err
 	}
 	return statedb{DB: db}, nil
 }
 
-func createVerificationTable(ctx context.Context, db *sql.DB) error {
-	_, err := db.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS verification (
+func createValidationTable(ctx context.Context, db *sql.DB) error {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	var legacy, current int
+	if err := tx.QueryRowContext(ctx, `SELECT
+		EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'verification'),
+		EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'validation')`).Scan(&legacy, &current); err != nil {
+		return err
+	}
+	if legacy != 0 {
+		if current != 0 {
+			return errors.New("both legacy verification and validation tables exist; resolve the conflicting validation records")
+		}
+		if _, err := tx.ExecContext(ctx, `ALTER TABLE verification RENAME TO validation`); err != nil {
+			return fmt.Errorf("migrate validation records: %w", err)
+		}
+	}
+	_, err = tx.ExecContext(ctx, `
+		CREATE TABLE IF NOT EXISTS validation (
 			commit_hash TEXT NOT NULL,
 			patch_id TEXT NOT NULL,
 			change_id TEXT NOT NULL,
@@ -48,7 +67,10 @@ func createVerificationTable(ctx context.Context, db *sql.DB) error {
 			created TEXT NOT NULL
 		)
 	`)
-	return err
+	if err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // An empty patch id or change id is not shared, so it never matches another row.
@@ -56,24 +78,24 @@ func alreadyPassed(ctx context.Context, db statedb, mode config.Mode, item ident
 	switch mode {
 	case config.ModeCommit:
 		return hasPass(ctx, db, `
-			SELECT 1 FROM verification
+			SELECT 1 FROM validation
 			WHERE commit_hash = ? AND passed = 1
 			LIMIT 1
 		`, item.hash)
 	case config.ModePatch:
 		return hasKeyedPass(ctx, db, item.patchID, `
-			SELECT 1 FROM verification
+			SELECT 1 FROM validation
 			WHERE patch_id = ? AND passed = 1
 			LIMIT 1
 		`)
 	case config.ModeChange:
 		return hasKeyedPass(ctx, db, item.changeID, `
-			SELECT 1 FROM verification
+			SELECT 1 FROM validation
 			WHERE change_id = ? AND passed = 1
 			LIMIT 1
 		`)
 	default:
-		return false, fmt.Errorf("verify mode %q is not commit, patch, or change", mode)
+		return false, fmt.Errorf("validate mode %q is not commit, patch, or change", mode)
 	}
 }
 
@@ -98,11 +120,11 @@ func hasPass(ctx context.Context, db statedb, query, key string) (bool, error) {
 
 func record(ctx context.Context, db statedb, item identity, passed bool) error {
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO verification (commit_hash, patch_id, change_id, passed, created)
+		INSERT INTO validation (commit_hash, patch_id, change_id, passed, created)
 		VALUES (?, ?, ?, ?, ?)
 	`, item.hash, item.patchID, item.changeID, passedBit(passed), time.Now().UTC().Format(time.RFC3339Nano))
 	if err != nil {
-		return fmt.Errorf("record verification: %w", err)
+		return fmt.Errorf("record validation: %w", err)
 	}
 	return nil
 }
@@ -116,7 +138,7 @@ func recordedOutcome(ctx context.Context, db statedb, mode config.Mode, item ide
 		return Outcome{Hash: item.hash, Passed: true}, true, nil
 	}
 	row := db.QueryRowContext(ctx, `
-		SELECT passed FROM verification
+		SELECT passed FROM validation
 		WHERE commit_hash = ?
 		ORDER BY created DESC, rowid DESC
 		LIMIT 1

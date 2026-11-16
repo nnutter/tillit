@@ -13,7 +13,7 @@ import (
 	"github.com/nnutter/spor/internal/cli/rebase"
 	"github.com/nnutter/spor/internal/cli/reset"
 	"github.com/nnutter/spor/internal/cli/status"
-	"github.com/nnutter/spor/internal/cli/verify"
+	"github.com/nnutter/spor/internal/cli/validate"
 )
 
 // New builds the spor command tree.
@@ -21,11 +21,11 @@ func New(version string) *cobra.Command {
 	log.SetDefault(log.NewWithOptions(os.Stderr, log.Options{ReportTimestamp: false}))
 	root := &cobra.Command{
 		Use:     "spor",
-		Short:   "Extract and verify refactor commits",
+		Short:   "Extract and validate refactor commits",
 		Version: version,
 		Args:    cobra.NoArgs,
 	}
 	root.PersistentFlags().String("repo", ".", "path to the git worktree")
-	root.AddCommand(add.New(), status.New(), verify.New(), config.New(), reset.New(), logcmd.New(), clicmd.New(), rebase.New())
+	root.AddCommand(add.New(), status.New(), validate.New(), config.New(), reset.New(), logcmd.New(), clicmd.New(), rebase.New())
 	return root
 }
