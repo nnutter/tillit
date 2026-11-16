@@ -155,6 +155,14 @@ Tightly integrate something like hk into the validation process.
 
 ## Usage
 
+The feature-branch snapshot selector captures the current branch ref, its tip, a boundary, and every commit reachable from the tip but not the boundary, with parents before children.
+When `push.default` is `current` and the upstream branch has a different branch name from the current branch, it uses the upstream commit as the boundary.
+For this comparison, `refs/remotes/origin/feature` tracking `refs/heads/feature` has the same branch name as the local `refs/heads/feature`; the different ref namespaces do not make the branches different.
+Otherwise the boundary is `git merge-base --fork-point origin/HEAD <tip>`.
+If that fork point cannot be found, selection fails rather than using an ordinary merge base or the entire history.
+A detached HEAD also fails; check out a branch before selecting a snapshot.
+This selector is preparation for automatic branch validation and is separate from pending Spor commits used by Mender and fixups.
+
 Spor reads configuration from four locations in order of increasing priority.
 A later file replaces only the fields it sets.
 Spor skips a file that is absent.
