@@ -16,6 +16,7 @@ import (
 	"github.com/nnutter/spor/internal/mender"
 	"github.com/nnutter/spor/internal/repository"
 	"github.com/nnutter/spor/internal/smith"
+	"github.com/nnutter/spor/internal/verifier"
 
 	_ "modernc.org/sqlite"
 )
@@ -162,12 +163,13 @@ func dispatch(ctx context.Context, repoPath string, item request) error {
 		_, err := mender.Rebase(ctx, repoPath, item.branch)
 		return err
 	case kindValidate:
+		_, verifyErr := verifier.VerifyBranch(ctx, repoPath)
 		_, branchErr := auditor.ValidateBranch(ctx, repoPath)
 		_, err := auditor.Validate(ctx, repoPath, config.Mode(item.mode))
 		if errors.Is(err, auditor.ErrCommandNotConfigured) {
 			err = nil
 		}
-		return errors.Join(branchErr, err)
+		return errors.Join(verifyErr, branchErr, err)
 	default:
 		return fmt.Errorf("unknown request kind")
 	}

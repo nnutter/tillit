@@ -86,7 +86,8 @@ After the second rebase, Spor's branch matches the user's.
 - `spor start` - Starts Spor daemon in the current Git worktree.
 - `spor daemon` - Runs the Spor daemon in the current Git worktree.
 - `spor status` - Displays the latest submission and recorded validation for every feature-branch commit selected from the branch boundary.
-  Uncached commits are pending; status does not run validation.
+  It also displays independent static verification results for those exact commits.
+  Uncached results are pending; status does not run validation or verification.
 - `spor add` - Queues the staged changes for the daemon to process.
   `spor stage` is an alias for `spor add`.
 - `spor reset` - Undoes the latest `spor add`.
@@ -99,6 +100,16 @@ After the second rebase, Spor's branch matches the user's.
   After a partial integration, `spor add` is refused until the remaining Spor commits are integrated.
 - `spor validate` - Queues a validation run. `--mode` selects the mode for that run.
 - `spor stop` - Stops the Spor daemon.
+
+## Static Verification
+
+The daemon checks feature-branch commits independently of configured validation, including when validation is missing or fails.
+A verified result currently covers only a one-parent commit modifying exactly one existing regular Go file without changing its mode, with no sibling Go files in that directory.
+Both versions must be self-contained, import-free, type-check under Go 1.27 rules, and use the verifier's restricted syntax.
+The change must rename one referenced, explicitly declared local variable and its uses while preserving all other tokens and identifier bindings.
+The check assumes local variable names have no runtime semantic significance and excludes debug metadata and observation of source positions.
+Other changes are unsupported or rejected, not verified; verification is not a replacement for validation.
+Results are cached by commit and analyzer version, and status reads the cache without performing analysis.
 
 ## Change Tracking
 

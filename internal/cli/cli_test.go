@@ -2,7 +2,9 @@ package cli_test
 
 import (
 	"bytes"
+	"context"
 	"encoding/json/v2"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,6 +50,64 @@ func TestStatusShowsEveryBranchCommit(t *testing.T) {
 	out := execute(t, dir, "status")
 	require.Contains(t, out, first.String()+" first failure failed")
 	require.Contains(t, out, second.String()+" later pending pending")
+}
+
+func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
+	for _, configured := range []bool{false, true} {
+		t.Run(fmt.Sprint(configured), func(t *testing.T) {
+			dir := initRepo(t, []byte("package p\nfunc f() int { var x = 1; return x }\n"), []byte("package p\nfunc f() int { var y = 1; return y }\n"))
+			if configured {
+				writeConfig(t, dir, []string{"false"}, "")
+			}
+			repo, err := git.PlainOpen(dir)
+			require.NoError(t, err)
+			defer func() { _ = repo.Close() }()
+			wt, err := repo.Worktree()
+			require.NoError(t, err)
+			sig := &object.Signature{Name: "Test", Email: "test@example.com", When: time.Now()}
+			rename, err := wt.Commit("rename", &git.CommitOptions{Author: sig})
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package p\nfunc f() int { var z = 1; return z }\n"), 0o644))
+			_, err = wt.Add("main.go")
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "extra.txt"), []byte("change"), 0o644))
+			_, err = wt.Add("extra.txt")
+			require.NoError(t, err)
+			mixed, err := wt.Commit("other change", &git.CommitOptions{Author: sig})
+			require.NoError(t, err)
+			before := execute(t, dir, "status")
+			require.Contains(t, before, rename.String()+" rename")
+			require.Contains(t, before, "verification: pending")
+			ctx, cancel := context.WithCancel(t.Context())
+			done := make(chan error, 1)
+			go func() { done <- daemon.Run(ctx, dir) }()
+			t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
+			var out string
+			ok := false
+			for range 100 {
+				out, err = runCLI(t, dir, "status")
+				if err == nil && strings.Contains(out, "verification: verified") && strings.Contains(out, "verification: unsupported: commit must modify exactly one file") {
+					ok = true
+					break
+				}
+				time.Sleep(100 * time.Millisecond)
+			}
+			require.True(t, ok, "status: %s; error: %v", out, err)
+			out = execute(t, dir, "status")
+			require.Contains(t, out, mixed.String()+" other change")
+			if configured {
+				require.Contains(t, out, rename.String()+" rename failed")
+			} else {
+				require.Contains(t, out, "validate command is not configured")
+			}
+			head, err := repo.Head()
+			require.NoError(t, err)
+			require.Equal(t, mixed, head.Hash())
+			status, err := wt.Status()
+			require.NoError(t, err)
+			require.True(t, status.IsClean())
+		})
+	}
 }
 
 func TestStatusWithNoSubmission(t *testing.T) {

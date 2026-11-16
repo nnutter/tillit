@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -166,7 +167,16 @@ func readTree(ctx context.Context, repo, revision string) (map[string]treeEntry,
 
 func gitOutput(ctx context.Context, repo string, args ...string) ([]byte, error) {
 	args = append([]string{"--no-replace-objects", "-C", repo}, args...)
-	out, err := exec.CommandContext(ctx, "git", args...).Output()
+	cmd := exec.CommandContext(ctx, "git", args...)
+	for _, entry := range os.Environ() {
+		key, _, _ := strings.Cut(entry, "=")
+		switch key {
+		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES", "GIT_PREFIX", "GIT_EXEC_PATH", "GIT_SEQUENCE_EDITOR":
+			continue
+		}
+		cmd.Env = append(cmd.Env, entry)
+	}
+	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("git command failed: %w", err)
 	}
