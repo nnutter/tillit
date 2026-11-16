@@ -67,6 +67,16 @@ type fixupModel struct {
 // Load reads the global, repository, worktree Git directory, and worktree root config files.
 // A later file replaces only the fields it sets. The mode defaults to change.
 func Load(gitDir string) (Config, error) {
+	root, err := repository.WorktreeRoot(gitDir)
+	if err != nil {
+		return Config{}, err
+	}
+	return LoadAt(gitDir, root)
+}
+
+// LoadAt merges external configuration from sourceGitDir with root's config.
+func LoadAt(sourceGitDir, root string) (Config, error) {
+	gitDir := sourceGitDir
 	cfg := Config{Mode: ModeChange, Auditor: Auditor{Thinking: ThinkingLow}, Mender: Auditor{Thinking: ThinkingLow}}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -89,10 +99,6 @@ func Load(gitDir string) (Config, error) {
 		if err != nil {
 			return Config{}, err
 		}
-	}
-	root, err := repository.WorktreeRoot(gitDir)
-	if err != nil {
-		return Config{}, err
 	}
 	return apply(cfg, filepath.Join(root, ".spor", "config.json"))
 }

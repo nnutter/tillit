@@ -1,0 +1,100 @@
+package auditor_test
+
+import (
+	"encoding/json/v2"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/nnutter/spor/internal/auditor"
+)
+
+func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	runGit(t, dir, "init", "-b", "feature")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "commit", "--allow-empty", "-m", "base")
+	base := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	runGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
+	runGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	log := filepath.Join(t.TempDir(), "log")
+	script := filepath.Join(t.TempDir(), "check")
+	writeFile(t, script, "#!/bin/sh\nprintf '%s %s %s\\n' \"$(git rev-parse HEAD)\" \"$PWD\" \"$1\" >> \""+log+"\"\n[ \"$1\" != fail ]\n")
+	configPath := filepath.Join(dir, ".spor", "config.json")
+	writeBranchConfig := func(value string) {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})
+		require.NoError(t, err)
+		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
+		require.NoError(t, os.WriteFile(configPath, data, 0o644))
+		runGit(t, dir, "add", ".spor/config.json")
+	}
+	writeBranchConfig("fail")
+	runGit(t, dir, "commit", "-m", "fails")
+	first := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	writeBranchConfig("pass")
+	runGit(t, dir, "commit", "-m", "passes")
+	second := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	linked := filepath.Join(t.TempDir(), "linked")
+	runGit(t, dir, "checkout", "--detach", base)
+	runGit(t, dir, "worktree", "add", linked, "feature")
+	writeFile(t, filepath.Join(linked, "dirty"), "preserve")
+	before := runGit(t, linked, "status", "--porcelain")
+	result, err := auditor.ValidateBranch(t.Context(), linked)
+	require.NoError(t, err)
+	require.Equal(t, second, result.Snapshot.Tip)
+	require.Equal(t, []auditor.BranchOutcome{{Hash: first, Subject: "fails", State: "failed", Error: "validation command failed"}, {Hash: second, Subject: "passes", State: "passed"}}, result.Outcomes)
+	lines := logLines(t, log)
+	require.Len(t, lines, 2)
+	require.Contains(t, lines[0], first+" ")
+	require.Contains(t, lines[0], " fail")
+	require.Contains(t, lines[1], second+" ")
+	require.NotContains(t, lines[0], linked)
+	_, err = auditor.ValidateBranch(t.Context(), linked)
+	require.NoError(t, err)
+	require.Equal(t, lines, logLines(t, log))
+	require.Equal(t, before, runGit(t, linked, "status", "--porcelain"))
+	require.Equal(t, "preserve", readFile(t, filepath.Join(linked, "dirty")))
+	require.Equal(t, second, strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD")))
+
+	// A malformed historical file must not prevent later commits from running.
+	writeFile(t, filepath.Join(linked, ".spor", "config.json"), "{")
+	runGit(t, linked, "add", ".spor/config.json")
+	runGit(t, linked, "commit", "-m", "bad config")
+	bad := strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD"))
+	runGit(t, linked, "rm", ".spor/config.json")
+	runGit(t, linked, "commit", "-m", "external config")
+	last := strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD"))
+	gitDir := strings.TrimSpace(runGit(t, linked, "rev-parse", "--absolute-git-dir"))
+	external := filepath.Join(gitDir, "spor", "config.json")
+	writeExternal := func(value string) {
+		t.Helper()
+		data, marshalErr := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})
+		require.NoError(t, marshalErr)
+		require.NoError(t, os.MkdirAll(filepath.Dir(external), 0o755))
+		require.NoError(t, os.WriteFile(external, data, 0o644))
+	}
+	writeExternal("fail")
+	result, err = auditor.ValidateBranch(t.Context(), linked)
+	require.NoError(t, err)
+	require.Equal(t, bad, result.Outcomes[2].Hash)
+	require.Equal(t, "error", result.Outcomes[2].State)
+	require.Equal(t, last, result.Outcomes[3].Hash)
+	require.Equal(t, "failed", result.Outcomes[3].State)
+	require.Len(t, logLines(t, log), 3)
+	_, err = auditor.ValidateBranch(t.Context(), linked)
+	require.NoError(t, err)
+	require.Len(t, logLines(t, log), 3)
+	writeExternal("pass")
+	result, err = auditor.ValidateBranch(t.Context(), linked)
+	require.NoError(t, err)
+	require.Equal(t, "passed", result.Outcomes[3].State)
+	require.Len(t, logLines(t, log), 4)
+}
