@@ -99,6 +99,12 @@ After the second rebase, Spor's branch matches the user's.
   A conflict in either part can block the whole request without changing the user's branch or Spor history.
   After a partial integration, `spor add` is refused until the remaining Spor commits are integrated.
 - `spor validate` - Queues a validation run. `--mode` selects the mode for that run.
+- `spor gh auth login` - Stores a read-only GitHub token in the system keyring.
+  Without flags it prints how to create a fine-grained token; `--token` stores one, and `--import-gh` copies the token the gh CLI already holds.
+- `spor gh auth status` - Reports the token source, owner, scopes, and rate limit.
+- `spor gh watch-pr` - Watches the pull request for the current feature branch.
+  It polls check runs and combined statuses, saves failure logs under the worktree Git directory, and prints the fetch commands to reproduce the pull request locally.
+  `--once` polls a single time; `--interval` and `--timeout` control watching; `--logs-dir` selects where failure logs go.
 - `spor stop` - Stops the Spor daemon.
 
 ## Static Verification
@@ -151,8 +157,10 @@ Spor will add a Spor-Id Git commit message trailer to identify changes that were
 
 ### 0.5.0
 
-- Spor could also monitor GitHub PR statuses.
-  However, the goal is to keep Spor as a local tool, so this would be an extension of it, not superseding local validation.
+- Spor monitors GitHub PR statuses for the current feature branch.
+- `spor gh auth login` stores a read-only token, and `spor gh auth status` reports its scopes.
+- `spor gh watch-pr` polls the pull request checks and fetches failure logs for reproduction.
+- GitHub monitoring stays an extension; it does not replace local validation.
 
 ## Future Ideas
 
