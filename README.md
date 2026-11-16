@@ -85,7 +85,8 @@ After the second rebase, Spor's branch matches the user's.
 
 - `spor start` - Starts Spor daemon in the current Git worktree.
 - `spor daemon` - Runs the Spor daemon in the current Git worktree.
-- `spor status` - Displays the status of the Spor daemon and any pending changes.
+- `spor status` - Displays the latest submission and recorded validation for every feature-branch commit selected from the branch boundary.
+  Uncached commits are pending; status does not run validation.
 - `spor add` - Queues the staged changes for the daemon to process.
   `spor stage` is an alias for `spor add`.
 - `spor reset` - Undoes the latest `spor add`.

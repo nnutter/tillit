@@ -86,12 +86,10 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 		outcome.State, outcome.Error = "error", ErrCommandNotConfigured.Error()
 		return outcome, nil
 	}
-	input, err := json.Marshal(cfg)
+	key, err := branchConfigKey(cfg)
 	if err != nil {
 		return outcome, err
 	}
-	sum := sha256.Sum256(input)
-	key := hex.EncodeToString(sum[:])
 	err = db.QueryRowContext(ctx, `SELECT state, error FROM branch_validation WHERE commit_hash = ? AND input = ?`, outcome.Hash, key).Scan(&outcome.State, &outcome.Error)
 	if err == nil {
 		return outcome, nil
@@ -108,6 +106,15 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 		return outcome, fmt.Errorf("record branch validation: %w", err)
 	}
 	return outcome, nil
+}
+
+func branchConfigKey(cfg config.Config) (string, error) {
+	input, err := json.Marshal(cfg)
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(input)
+	return hex.EncodeToString(sum[:]), nil
 }
 
 func runBranchCommand(ctx context.Context, gitDir string, command []string, outcome BranchOutcome) BranchOutcome {

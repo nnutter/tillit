@@ -214,6 +214,10 @@ func readDocument(path string) (document, error) {
 	if err != nil {
 		return document{}, err
 	}
+	return decodeDocument(data, path)
+}
+
+func decodeDocument(data []byte, path string) (document, error) {
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return document{}, fmt.Errorf("read spor config %s: %w", path, err)

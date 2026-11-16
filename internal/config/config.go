@@ -76,7 +76,30 @@ func Load(gitDir string) (Config, error) {
 
 // LoadAt merges external configuration from sourceGitDir with root's config.
 func LoadAt(sourceGitDir, root string) (Config, error) {
-	gitDir := sourceGitDir
+	cfg, err := loadExternal(sourceGitDir)
+	if err != nil {
+		return Config{}, err
+	}
+	return apply(cfg, filepath.Join(root, ".spor", "config.json"))
+}
+
+// LoadHistorical merges external settings with a historical root config, if present.
+func LoadHistorical(sourceGitDir string, data []byte) (Config, error) {
+	cfg, err := loadExternal(sourceGitDir)
+	if err != nil {
+		return cfg, err
+	}
+	if data == nil {
+		return cfg, nil
+	}
+	doc, err := decodeDocument(data, ".spor/config.json")
+	if err != nil {
+		return Config{}, err
+	}
+	return applyDocument(cfg, doc)
+}
+
+func loadExternal(gitDir string) (Config, error) {
 	cfg := Config{Mode: ModeChange, Auditor: Auditor{Thinking: ThinkingLow}, Mender: Auditor{Thinking: ThinkingLow}}
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -100,7 +123,7 @@ func LoadAt(sourceGitDir, root string) (Config, error) {
 			return Config{}, err
 		}
 	}
-	return apply(cfg, filepath.Join(root, ".spor", "config.json"))
+	return cfg, nil
 }
 
 // ParseMode accepts commit, patch, or change.
@@ -118,6 +141,10 @@ func apply(cfg Config, path string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+	return applyDocument(cfg, doc)
+}
+
+func applyDocument(cfg Config, doc document) (Config, error) {
 	if err := applyValidate(&cfg, doc); err != nil {
 		return Config{}, err
 	}

@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v6"
+	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/cli"
 	"github.com/nnutter/spor/internal/daemon"
 )
@@ -26,6 +28,26 @@ func TestAddAndStatusPrintTheSubmission(t *testing.T) {
 	require.Contains(t, status, "spor-id: S")
 	require.Contains(t, status, "Refactor: Rename variable x to y in f")
 	require.Contains(t, status, "Apply the remaining added changes")
+}
+
+func TestStatusShowsEveryBranchCommit(t *testing.T) {
+	dir := cleanRepo(t)
+	writeConfig(t, dir, []string{"false"}, "")
+	repo, err := git.PlainOpen(dir)
+	require.NoError(t, err)
+	defer func() { _ = repo.Close() }()
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	sig := &object.Signature{Name: "Test", Email: "test@example.com", When: time.Now()}
+	first, err := wt.Commit("first failure", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
+	require.NoError(t, err)
+	_, err = auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	second, err := wt.Commit("later pending", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
+	require.NoError(t, err)
+	out := execute(t, dir, "status")
+	require.Contains(t, out, first.String()+" first failure failed")
+	require.Contains(t, out, second.String()+" later pending pending")
 }
 
 func TestStatusWithNoSubmission(t *testing.T) {
@@ -326,12 +348,14 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 	require.NoError(t, err)
 	_, err = worktree.Add("main.go")
 	require.NoError(t, err)
-	_, err = worktree.Commit("init", &git.CommitOptions{Author: &object.Signature{
+	base, err := worktree.Commit("init", &git.CommitOptions{Author: &object.Signature{
 		Name:  "Spor Test",
 		Email: "spor@example.com",
 		When:  time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 	}})
 	require.NoError(t, err)
+	require.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference("refs/remotes/origin/main", base)))
+	require.NoError(t, repo.Storer.SetReference(plumbing.NewSymbolicReference("refs/remotes/origin/HEAD", "refs/remotes/origin/main")))
 	if !bytes.Equal(committed, staged) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), staged, 0o644))
 		_, err = worktree.Add("main.go")
