@@ -72,7 +72,7 @@ func TestLegacyQueuedVerificationIsProcessedAsValidation(t *testing.T) {
 	_, err = db.Exec(`UPDATE request SET kind = 'verify'`)
 	require.NoError(t, err)
 	processed, err := daemon.ProcessPending(t.Context(), dir)
-	require.NoError(t, err)
+	require.ErrorContains(t, err, "fork-point")
 	require.True(t, processed)
 	var kind string
 	require.NoError(t, db.QueryRow(`SELECT kind FROM request`).Scan(&kind))

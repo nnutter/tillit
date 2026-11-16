@@ -162,11 +162,12 @@ func dispatch(ctx context.Context, repoPath string, item request) error {
 		_, err := mender.Rebase(ctx, repoPath, item.branch)
 		return err
 	case kindValidate:
+		_, branchErr := auditor.ValidateBranch(ctx, repoPath)
 		_, err := auditor.Validate(ctx, repoPath, config.Mode(item.mode))
 		if errors.Is(err, auditor.ErrCommandNotConfigured) {
-			return nil
+			err = nil
 		}
-		return err
+		return errors.Join(branchErr, err)
 	default:
 		return fmt.Errorf("unknown request kind")
 	}
