@@ -11,7 +11,12 @@ import (
 	"strings"
 )
 
-const languageVersion = "go1.27"
+const (
+	languageVersion = "go1.27"
+	// AnalyzerVersion identifies the complete commit verification algorithm and evidence format.
+	// Bump it whenever either changes.
+	AnalyzerVersion = "local-rename-v1"
+)
 
 // Status describes whether the verifier established its proof condition.
 type Status string
@@ -80,7 +85,7 @@ func Verify(filename string, before, after []byte) Result {
 		return Result{Status: Rejected, Reason: reason}
 	}
 	return Result{Status: Verified, Evidence: &Evidence{
-		AnalyzerVersion: "local-rename-v1", LanguageVersion: languageVersion, File: filename, Function: change.function,
+		AnalyzerVersion: AnalyzerVersion, LanguageVersion: languageVersion, File: filename, Function: change.function,
 		BeforeName: change.old.Name(), AfterName: change.new.Name(),
 		CheckedConditions: []string{"supported syntax", "both files type-check without imports", "identical tokens except one local declaration and all its references", "corresponding identifier bindings preserved"},
 		Assumptions:       []string{"local variable names have no runtime semantic significance", "debug metadata and source position observation are excluded"},
