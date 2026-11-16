@@ -100,7 +100,7 @@ After the second rebase, Spor's branch matches the user's.
   After a partial integration, `spor add` is refused until the remaining Spor commits are integrated.
 - `spor validate` - Queues a validation run. `--mode` selects the mode for that run.
 - `spor gh auth login` - Stores a read-only GitHub token in the system keyring.
-  Without flags it opens a pre-filled fine-grained token creation page and prints the URL; `--token` stores one, `--import-gh` copies the token the gh CLI already holds, and `--no-open` prints the URL without opening a browser.
+  Without flags it opens a pre-filled fine-grained token creation page, waits for the token to be pasted, validates it, and stores it; `--token` stores one without prompting, `--import-gh` copies the token the gh CLI already holds, and `--no-open` prints the URL without opening a browser.
 - `spor gh auth status` - Reports the token source, owner, scopes, and rate limit.
 - `spor gh watch-pr` - Watches the pull request for the current feature branch.
   It polls check runs and combined statuses, saves failure logs under the worktree Git directory, and prints the fetch commands to reproduce the pull request locally.

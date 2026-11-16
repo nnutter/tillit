@@ -53,6 +53,11 @@ func stubRing(t *testing.T, ring sporgh.Ring) {
 
 func runGH(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
+	return runGHWithInput(t, dir, "", args...)
+}
+
+func runGHWithInput(t *testing.T, dir, input string, args ...string) (string, error) {
+	t.Helper()
 	root := &cobra.Command{Use: "spor"}
 	root.PersistentFlags().String("repo", ".", "path to the git worktree")
 	root.AddCommand(cligh.New())
@@ -61,6 +66,8 @@ func runGH(t *testing.T, dir string, args ...string) (string, error) {
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&bytes.Buffer{})
+	// Never inherit the test process stdin: a terminal there would block reads.
+	root.SetIn(strings.NewReader(input))
 	root.SetArgs(append([]string{"--repo", dir}, args...))
 	err := root.ExecuteContext(t.Context())
 	return out.String(), err
@@ -171,6 +178,60 @@ func TestAuthLoginWithoutRepoRemoteOmitsTarget(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, *opened, "personal-access-tokens/new")
 	require.NotContains(t, *opened, "target_name")
+}
+
+func TestAuthLoginStoresPastedToken(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rate_limit":
+			_, _ = w.Write([]byte(`{"resources":{"core":{"limit":5000,"remaining":4999}}}`))
+		case "/user":
+			_, _ = w.Write([]byte(`{"login":"octocat"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("GITHUB_API_URL", server.URL)
+	ring := newFakeRing()
+	stubRing(t, ring)
+	opened := stubOpenURL(t)
+	dir := initGitRepo(t, "feature", "https://github.com/octo/repo.git")
+
+	out, err := runGHWithInput(t, dir, "pasted-token\n", "gh", "auth", "login")
+	require.NoError(t, err)
+	require.Contains(t, *opened, "personal-access-tokens/new")
+	require.Contains(t, out, "octocat")
+	require.Contains(t, out, "Stored")
+	require.Equal(t, []byte("pasted-token"), ring.items[sporgh.TokenKey])
+}
+
+func TestAuthLoginEmptyStdinStoresNothing(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/rate_limit":
+			_, _ = w.Write([]byte(`{"resources":{"core":{"limit":5000,"remaining":4999}}}`))
+		case "/user":
+			_, _ = w.Write([]byte(`{"login":"octocat"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	t.Cleanup(server.Close)
+	t.Setenv("GITHUB_API_URL", server.URL)
+	ring := newFakeRing()
+	stubRing(t, ring)
+	stubOpenURL(t)
+	dir := initGitRepo(t, "feature", "https://github.com/octo/repo.git")
+
+	out, err := runGHWithInput(t, dir, "  \n", "gh", "auth", "login")
+	require.NoError(t, err)
+	require.Contains(t, out, "personal-access-tokens/new")
+	require.Empty(t, ring.items)
 }
 
 func TestAuthLoginRejectsBothFlags(t *testing.T) {

@@ -2,9 +2,12 @@ package gh
 
 import (
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	sporgh "github.com/nnutter/spor/internal/gh"
 )
@@ -71,15 +74,32 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 		}
 		return printStored(cmd, sporgh.SourceKeyring)
 	}
-	return openTokenPage(cmd)
+	return openTokenPage(cmd, ring)
 }
 
-func openTokenPage(cmd *cobra.Command) error {
+func openTokenPage(cmd *cobra.Command, ring sporgh.Ring) error {
 	target := loginTarget(cmd)
 	rawURL := sporgh.NewTokenURL(sporgh.WatchTokenTemplate(target))
 	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\n", loginGuidance(rawURL)); err != nil {
 		return err
 	}
+	if err := maybeOpenBrowser(cmd, rawURL); err != nil {
+		return err
+	}
+	token, pasted, err := readPastedToken(cmd)
+	if err != nil {
+		return err
+	}
+	if !pasted {
+		return nil
+	}
+	if err := storeValidated(cmd, ring, token); err != nil {
+		return err
+	}
+	return printStored(cmd, sporgh.SourceKeyring)
+}
+
+func maybeOpenBrowser(cmd *cobra.Command, rawURL string) error {
 	noOpen, err := cmd.Flags().GetBool("no-open")
 	if err != nil {
 		return err
@@ -91,6 +111,34 @@ func openTokenPage(cmd *cobra.Command) error {
 		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Could not open a browser; use the URL above.")
 	}
 	return nil
+}
+
+// readPastedToken waits for the user to paste the token they just created.
+// It reports false when stdin carries nothing, leaving the printed guidance
+// as the whole interaction for headless sessions.
+func readPastedToken(cmd *cobra.Command) (string, bool, error) {
+	if file, ok := cmd.InOrStdin().(*os.File); ok && term.IsTerminal(int(file.Fd())) {
+		return readTerminalToken(cmd, file)
+	}
+	data, err := io.ReadAll(cmd.InOrStdin())
+	if err != nil {
+		return "", false, fmt.Errorf("read token from stdin: %w", err)
+	}
+	token := strings.TrimSpace(string(data))
+	return token, token != "", nil
+}
+
+func readTerminalToken(cmd *cobra.Command, stdin *os.File) (string, bool, error) {
+	if _, err := fmt.Fprint(cmd.OutOrStdout(), "Paste your token (input hidden): "); err != nil {
+		return "", false, err
+	}
+	secret, err := term.ReadPassword(int(stdin.Fd()))
+	if err != nil {
+		return "", false, fmt.Errorf("read token from terminal: %w", err)
+	}
+	_, _ = fmt.Fprintln(cmd.OutOrStdout())
+	token := strings.TrimSpace(string(secret))
+	return token, token != "", nil
 }
 
 func loginTarget(cmd *cobra.Command) string {
@@ -139,7 +187,7 @@ func loginGuidance(rawURL string) string {
 	guidance.WriteString("Create a read-only fine-grained personal access token:\n")
 	guidance.WriteString("  1. Open " + rawURL + "\n")
 	guidance.WriteString("  2. Confirm read access to Checks, Actions, Pull requests, Contents, and Metadata.\n")
-	guidance.WriteString("  3. Store it with: spor gh auth login --token TOKEN\n")
+	guidance.WriteString("  3. Paste the token at the prompt to store it, or store it later with: spor gh auth login --token TOKEN\n")
 	guidance.WriteString("  Or copy the gh CLI token with: spor gh auth login --import-gh\n")
 	return guidance.String()
 }
