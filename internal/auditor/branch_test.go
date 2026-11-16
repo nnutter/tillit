@@ -10,7 +10,58 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/spor/internal/auditor"
+	"github.com/nnutter/spor/internal/repository"
 )
+
+func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	runGit(t, dir, "init", "-b", "feature")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "commit", "--allow-empty", "-m", "base")
+	base := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	runGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
+	runGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	script := filepath.Join(t.TempDir(), "check")
+	data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{script}}}})
+	require.NoError(t, err)
+	writeFile(t, filepath.Join(dir, ".spor", "config.json"), string(data))
+	runGit(t, dir, "add", ".spor/config.json")
+	runGit(t, dir, "commit", "-m", "check")
+	gitDir := strings.TrimSpace(runGit(t, dir, "rev-parse", "--absolute-git-dir"))
+	dest, err := repository.CheckoutDir(gitDir)
+	require.NoError(t, err)
+	writeFile(t, dest, "blocks checkout")
+
+	result, err := auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "error", result.Outcomes[0].State)
+	report, err := auditor.ReportBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, result.Outcomes, report.Outcomes)
+
+	require.NoError(t, os.Remove(dest))
+	result, err = auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "error", result.Outcomes[0].State)
+	require.Contains(t, result.Outcomes[0].Error, script)
+	report, err = auditor.ReportBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, result.Outcomes, report.Outcomes)
+
+	writeFile(t, script, "#!/bin/sh\nexit 0\n")
+	require.NoError(t, os.Chmod(script, 0o755))
+	result, err = auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "passed", result.Outcomes[0].State)
+	require.Empty(t, result.Outcomes[0].Error)
+	report, err = auditor.ReportBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, result.Outcomes, report.Outcomes)
+}
 
 func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	dir := t.TempDir()

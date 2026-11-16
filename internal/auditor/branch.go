@@ -10,6 +10,7 @@ import (
 	"fmt"
 
 	"github.com/go-git/go-git/v6/plumbing"
+	"github.com/go-git/go-git/v6/plumbing/object"
 
 	"github.com/nnutter/spor/internal/config"
 	"github.com/nnutter/spor/internal/repository"
@@ -63,7 +64,7 @@ func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) 
 			return result, err
 		}
 		outcome := BranchOutcome{Hash: hash, Subject: subjectOf(commit.Message)}
-		outcome, err = validateBranchCommit(ctx, db, gitDir, dest, outcome)
+		outcome, err = validateBranchCommit(ctx, db, gitDir, dest, commit, outcome)
 		if err != nil {
 			return result, err
 		}
@@ -72,12 +73,12 @@ func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) 
 	return result, nil
 }
 
-func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, outcome BranchOutcome) (BranchOutcome, error) {
-	if err := prepareBranchCheckout(ctx, gitDir, dest, outcome.Hash); err != nil {
-		outcome.State, outcome.Error = "error", err.Error()
-		return outcome, nil
+func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, commit *object.Commit, outcome BranchOutcome) (BranchOutcome, error) {
+	data, err := historicalConfig(commit)
+	if err != nil {
+		return outcome, err
 	}
-	cfg, err := config.LoadAt(gitDir, dest)
+	cfg, err := config.LoadHistorical(gitDir, data)
 	if err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
 		return outcome, nil
@@ -90,22 +91,41 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 	if err != nil {
 		return outcome, err
 	}
-	err = db.QueryRowContext(ctx, `SELECT state, error FROM branch_validation WHERE commit_hash = ? AND input = ?`, outcome.Hash, key).Scan(&outcome.State, &outcome.Error)
-	if err == nil {
-		return outcome, nil
+	if err := prepareBranchCheckout(ctx, gitDir, dest, outcome.Hash); err != nil {
+		outcome.State, outcome.Error = "error", err.Error()
+	} else {
+		var cached bool
+		outcome, cached, err = cachedBranchOutcome(ctx, db, key, outcome)
+		if err != nil {
+			return outcome, err
+		}
+		if cached {
+			return outcome, nil
+		}
+		outcome = runBranchCommand(ctx, gitDir, cfg.Command, outcome)
 	}
-	if !errors.Is(err, sql.ErrNoRows) {
-		return outcome, err
-	}
-	outcome = runBranchCommand(ctx, gitDir, cfg.Command, outcome)
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
 	}
-	_, err = db.ExecContext(ctx, `INSERT INTO branch_validation (commit_hash, input, state, error) VALUES (?, ?, ?, ?)`, outcome.Hash, key, outcome.State, outcome.Error)
+	_, err = db.ExecContext(ctx, `INSERT INTO branch_validation (commit_hash, input, state, error) VALUES (?, ?, ?, ?) ON CONFLICT (commit_hash, input) DO UPDATE SET state = excluded.state, error = excluded.error`, outcome.Hash, key, outcome.State, outcome.Error)
 	if err != nil {
 		return outcome, fmt.Errorf("record branch validation: %w", err)
 	}
 	return outcome, nil
+}
+
+func cachedBranchOutcome(ctx context.Context, db statedb, key string, outcome BranchOutcome) (BranchOutcome, bool, error) {
+	err := db.QueryRowContext(ctx, `SELECT state, error FROM branch_validation WHERE commit_hash = ? AND input = ?`, outcome.Hash, key).Scan(&outcome.State, &outcome.Error)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return outcome, false, err
+	}
+	if err == nil {
+		if outcome.State != "error" {
+			return outcome, true, nil
+		}
+	}
+	outcome.Error = ""
+	return outcome, false, nil
 }
 
 func branchConfigKey(cfg config.Config) (string, error) {
