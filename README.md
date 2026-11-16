@@ -6,7 +6,34 @@ Spor will work in an adjacent branch/worktree to verify and fix-up commits, when
 
 Spor will analyze the staged changes to detect and extract refactor commits.
 
+Spor's operational verification runs its configured check and records the outcome.
+A successful operational verification does not by itself claim formal verification of behavior preservation.
+
+## Refactor confidence
+
+The Language section of `CONTEXT.md` defines validation and verification as different grounds for confidence in a refactor.
+Validation is empirical confidence from existing tests still passing.
+Verification is conditional formal confidence from checked language-semantic conditions that imply behavior preservation under stated assumptions.
+
+For example, a verified variable rename requires the renamed references to retain their bindings to the renamed declaration and untouched references to retain their original bindings.
+It also requires checking that no conflicts or capture change name resolution.
+These checks must cover the relevant code and build configurations, and the stated assumptions must support the behavior-preservation claim.
+
+A tool such as `gopls` is a candidate for performing or assisting with these checks, not automatic proof.
+A `Verified` claim depends on the conditions actually checked, the tool's guarantees and version, the scope and build configurations covered, and the assumptions made.
+Compilation or static acceptance alone is insufficient.
+Tests complement verification and remain required by the project workflow.
+
+Commit subjects can distinguish the evidence behind a refactor:
+
+- `Refactor: Verified variable rename, foo`
+- `Refactor: Validated extract function, foo()`
+
+These are illustrative subjects, not claims that either refactor has been performed or verified.
+
 ## Example Workflow
+
+In this workflow, verification and its success or failure refer to Spor's operational check, not necessarily formal verification.
 
 | User | User Branch | Spor Branch | Spor |
 | --- | --- | --- | --- |
@@ -139,12 +166,15 @@ The mode defaults to `change`.
 
 `auditor.verify.command` is the program and its arguments.
 `auditor.verify.mode` is `commit`, `patch`, or `change`.
+These operational configuration names and Spor's verification statuses do not themselves imply formal verification.
 `auditor.fixup.model.provider` and `auditor.fixup.model.version` select the `pi` agent.
 `auditor.fixup.model.effort` is a `pi` thinking level such as `low`.
 `mender.conflict.model.provider`, `mender.conflict.model.version`, and `mender.conflict.model.effort` configure `pi` for resolving rebase conflicts.
 The provider and version are required only when a conflict occurs, and effort defaults to `low`.
 Spor prepares integration in an isolated checkout and checks the branch and worktree again before publication.
 External Git commands can still race with publication, so avoid changing the branch or worktree while a rebase request runs.
+
+The following `go test` command supplies validation when existing tests pass, not verification in the formal sense defined above.
 
 ```json
 {
