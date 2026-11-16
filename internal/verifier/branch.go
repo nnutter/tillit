@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	_ "modernc.org/sqlite"
 
@@ -30,8 +31,8 @@ type BranchResult struct {
 	Outcomes []BranchOutcome
 }
 
-// VerifyBranch analyzes uncached commits and persists successful analyses,
-// including unsupported results. Transient errors are reported but not cached.
+// VerifyBranch analyzes uncached commits and persists results, including
+// unsupported results. Recorded transient errors are retried on the next run.
 func VerifyBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 	return branch(ctx, repoPath, true)
 }
@@ -122,11 +123,11 @@ func branchCommit(ctx context.Context, db *sql.DB, repo, hash string, verify boo
 	if db == nil {
 		return outcome, nil
 	}
-	cached, err := readVerification(ctx, db, hash)
+	cached, lastError, err := readVerification(ctx, db, hash)
 	if err != nil {
 		return outcome, err
 	}
-	outcome.Result = cached
+	outcome.Result, outcome.Error = cached, lastError
 	if !verify {
 		return outcome, nil
 	}
@@ -139,29 +140,35 @@ func branchCommit(ctx context.Context, db *sql.DB, repo, hash string, verify boo
 			return outcome, ctx.Err()
 		}
 		outcome.Error = err.Error()
+		if err := recordVerificationValue(ctx, db, hash, "error:"+outcome.Error); err != nil {
+			return outcome, err
+		}
 		return outcome, nil
 	}
 	if err := recordVerification(ctx, db, hash, checked); err != nil {
 		return outcome, err
 	}
-	outcome.Result = &checked
+	outcome.Result, outcome.Error = &checked, ""
 	return outcome, nil
 }
 
-func readVerification(ctx context.Context, db *sql.DB, hash string) (*Result, error) {
+func readVerification(ctx context.Context, db *sql.DB, hash string) (*Result, string, error) {
 	var raw string
 	err := db.QueryRowContext(ctx, `SELECT result FROM semantic_verification WHERE commit_hash=? AND analyzer=? AND language=? AND runtime=?`, hash, AnalyzerVersion, languageVersion, runtime.Version()).Scan(&raw)
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil
+		return nil, "", nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("read verification for %s: %w", hash, err)
+		return nil, "", fmt.Errorf("read verification for %s: %w", hash, err)
+	}
+	if lastError, ok := strings.CutPrefix(raw, "error:"); ok {
+		return nil, lastError, nil
 	}
 	var cached Result
 	if err := json.Unmarshal([]byte(raw), &cached); err != nil {
-		return nil, fmt.Errorf("decode verification for %s: %w", hash, err)
+		return nil, "", fmt.Errorf("decode verification for %s: %w", hash, err)
 	}
-	return &cached, nil
+	return &cached, "", nil
 }
 
 func recordVerification(ctx context.Context, db *sql.DB, hash string, checked Result) error {
@@ -169,7 +176,11 @@ func recordVerification(ctx context.Context, db *sql.DB, hash string, checked Re
 	if err != nil {
 		return fmt.Errorf("encode verification for %s: %w", hash, err)
 	}
-	_, err = db.ExecContext(ctx, `INSERT OR REPLACE INTO semantic_verification (commit_hash, analyzer, language, runtime, result) VALUES (?, ?, ?, ?, ?)`, hash, AnalyzerVersion, languageVersion, runtime.Version(), string(raw))
+	return recordVerificationValue(ctx, db, hash, string(raw))
+}
+
+func recordVerificationValue(ctx context.Context, db *sql.DB, hash, value string) error {
+	_, err := db.ExecContext(ctx, `INSERT OR REPLACE INTO semantic_verification (commit_hash, analyzer, language, runtime, result) VALUES (?, ?, ?, ?, ?)`, hash, AnalyzerVersion, languageVersion, runtime.Version(), value)
 	if err != nil {
 		return fmt.Errorf("record verification for %s: %w", hash, err)
 	}
