@@ -4,8 +4,9 @@
 - Spor should use `pi` to call a coding agent for specified coding agent tasks using a configured provider/model.
 - Spor configuration should follow a hierarchy:
   - Global configuration in `~/.config/spor/config.json`
-  - Repository configuration in `spor/config.json` in the Git worktree's git-common-dir (that's the base worktree's git-dir, right?)
+  - Repository configuration in `spor/config.json` in the Git worktree's git-common-dir
   - Worktree configuration in `spor/config.json` in the Git worktree's git-dir
+  - Highest-priority configuration in `.spor/config.json` at the worktree root
 
 ## Skills
 

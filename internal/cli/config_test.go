@@ -67,6 +67,52 @@ func TestConfigScopeFlagsChooseTheFile(t *testing.T) {
 	require.ErrorContains(t, err, "scope")
 }
 
+func TestConfigReadsMainWorktreeRootFromSubdirectory(t *testing.T) {
+	dir := cleanRepo(t)
+	subdir := filepath.Join(dir, "nested")
+	require.NoError(t, os.MkdirAll(subdir, 0o755))
+	execute(t, dir, "config", "set", "auditor.verify.mode", `"commit"`)
+	path := filepath.Join(dir, ".spor", "config.json")
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	require.NoError(t, os.WriteFile(path, []byte(`{"auditor":{"verify":{"mode":"patch"}}}`), 0o644))
+	require.Equal(t, "patch\n", execute(t, subdir, "config", "get", "auditor.verify.mode"))
+}
+
+func TestConfigReadsWorktreeRootWithHighestPriority(t *testing.T) {
+	dir := cleanRepo(t)
+	worktree := linkedWorktree(t, dir)
+	subdir := filepath.Join(worktree, "nested")
+	require.NoError(t, os.MkdirAll(subdir, 0o755))
+
+	execute(t, worktree, "config", "set", "--global", "auditor.verify.command", `["global"]`)
+	execute(t, worktree, "config", "set", "--global", "auditor.fixup.model.provider", `"global-provider"`)
+	execute(t, worktree, "config", "set", "--repository", "auditor.verify.mode", `"commit"`)
+	execute(t, worktree, "config", "set", "auditor.verify.mode", `"patch"`)
+	execute(t, worktree, "config", "set", "auditor.fixup.model.version", `"worktree-model"`)
+
+	rootConfig := filepath.Join(worktree, ".spor", "config.json")
+	require.Equal(t, "patch\n", execute(t, subdir, "config", "get", "auditor.verify.mode"))
+	require.NoError(t, os.MkdirAll(filepath.Dir(rootConfig), 0o755))
+	require.NoError(t, os.WriteFile(rootConfig, []byte(`{"auditor":{"verify":{"command":[],"mode":"change"}}}`), 0o644))
+	require.Equal(t, "change\n", execute(t, subdir, "config", "get", "auditor.verify.mode"))
+	_, err := runCLI(t, subdir, "config", "get", "auditor.verify.command")
+	require.ErrorContains(t, err, "unset")
+	shown := execute(t, subdir, "config", "show")
+	require.Contains(t, shown, "global-provider")
+	require.Contains(t, shown, "worktree-model")
+	require.NotContains(t, shown, "global\"")
+	require.Equal(t, "commit\n", execute(t, dir, "config", "get", "auditor.verify.mode"))
+	require.Equal(t, "commit\n", execute(t, worktree, "config", "get", "--repository", "auditor.verify.mode"))
+	execute(t, subdir, "config", "set", "auditor.verify.mode", `"commit"`)
+	require.Equal(t, "change\n", execute(t, subdir, "config", "get", "auditor.verify.mode"))
+	require.FileExists(t, filepath.Join(worktreeGitDir(t, worktree), "spor", "config.json"))
+	require.NoError(t, os.WriteFile(rootConfig, []byte(`{invalid`), 0o644))
+	_, err = runCLI(t, subdir, "config", "show")
+	require.Error(t, err)
+	require.NoError(t, os.Remove(rootConfig))
+	require.Equal(t, "commit\n", execute(t, subdir, "config", "get", "auditor.verify.mode"))
+}
+
 func TestConfigCompletesKeys(t *testing.T) {
 	get := complete(t, "config", "get", "")
 	require.Contains(t, get, "auditor.verify.command\n")

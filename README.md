@@ -155,7 +155,7 @@ Tightly integrate something like hk into the verification process.
 
 ## Usage
 
-Spor reads configuration from three files.
+Spor reads configuration from four locations in order of increasing priority.
 A later file replaces only the fields it sets.
 Spor skips a file that is absent.
 The mode defaults to `change`.
@@ -163,6 +163,9 @@ The mode defaults to `change`.
 - Global configuration is `~/.config/spor/config.json`.
 - Repository configuration is `spor/config.json` in the Git common directory.
 - Worktree configuration is `spor/config.json` in the worktree Git directory when that path is separate from the Git common directory.
+- Worktree root configuration is `.spor/config.json` at the root of the current Git worktree.
+
+The `spor config` write commands still target the worktree Git directory by default, or the selected global or repository scope; they do not write the worktree root file.
 
 `auditor.verify.command` is the program and its arguments.
 `auditor.verify.mode` is `commit`, `patch`, or `change`.

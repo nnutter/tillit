@@ -62,6 +62,25 @@ func CommonDir(gitDir string) (string, error) {
 	return path, nil
 }
 
+// WorktreeRoot returns the worktree root associated with a Git directory.
+func WorktreeRoot(gitDir string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(gitDir, "gitdir"))
+	if errors.Is(err, os.ErrNotExist) {
+		return filepath.Dir(gitDir), nil
+	}
+	if err != nil {
+		return "", err
+	}
+	path := strings.TrimSpace(string(data))
+	if path == "" {
+		return "", fmt.Errorf("empty gitdir file in %s", gitDir)
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(gitDir, path)
+	}
+	return filepath.Dir(path), nil
+}
+
 func commonPath(gitDir string) (string, bool, error) {
 	data, err := os.ReadFile(filepath.Join(gitDir, "commondir"))
 	if errors.Is(err, os.ErrNotExist) {

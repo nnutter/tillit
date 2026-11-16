@@ -64,7 +64,7 @@ type fixupModel struct {
 	Effort   string `json:"effort,omitempty"`
 }
 
-// Load reads the global, repository, and worktree config files.
+// Load reads the global, repository, worktree Git directory, and worktree root config files.
 // A later file replaces only the fields it sets. The mode defaults to change.
 func Load(gitDir string) (Config, error) {
 	cfg := Config{Mode: ModeChange, Auditor: Auditor{Thinking: ThinkingLow}, Mender: Auditor{Thinking: ThinkingLow}}
@@ -84,10 +84,17 @@ func Load(gitDir string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	if common == gitDir {
-		return cfg, nil
+	if common != gitDir {
+		cfg, err = apply(cfg, filepath.Join(gitDir, "spor", "config.json"))
+		if err != nil {
+			return Config{}, err
+		}
 	}
-	return apply(cfg, filepath.Join(gitDir, "spor", "config.json"))
+	root, err := repository.WorktreeRoot(gitDir)
+	if err != nil {
+		return Config{}, err
+	}
+	return apply(cfg, filepath.Join(root, ".spor", "config.json"))
 }
 
 // ParseMode accepts commit, patch, or change.
