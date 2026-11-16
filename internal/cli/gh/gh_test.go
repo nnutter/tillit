@@ -111,10 +111,23 @@ func run(t *testing.T, dir, name string, args ...string) {
 	require.NoError(t, err, string(out))
 }
 
-func TestAuthLoginPrintsGuidance(t *testing.T) {
+func stubOpenURL(t *testing.T) *string {
+	t.Helper()
+	old := sporgh.OpenURL
+	t.Cleanup(func() { sporgh.OpenURL = old })
+	var opened string
+	sporgh.OpenURL = func(rawURL string) error {
+		opened = rawURL
+		return nil
+	}
+	return &opened
+}
+
+func TestAuthLoginOpensPrefilledTokenPage(t *testing.T) {
 	t.Setenv("GH_TOKEN", "")
 	t.Setenv("GITHUB_TOKEN", "")
 	stubRing(t, newFakeRing())
+	opened := stubOpenURL(t)
 	dir := initGitRepo(t, "feature", "https://github.com/octo/repo.git")
 
 	out, err := runGH(t, dir, "gh", "auth", "login")
@@ -122,6 +135,42 @@ func TestAuthLoginPrintsGuidance(t *testing.T) {
 	require.Contains(t, out, "personal-access-tokens/new")
 	require.Contains(t, out, "--token")
 	require.Contains(t, out, "--import-gh")
+	require.Contains(t, *opened, "personal-access-tokens/new")
+	require.Contains(t, *opened, "target_name=octo")
+	require.Contains(t, *opened, "checks=read")
+	require.Contains(t, *opened, "pull_requests=read")
+}
+
+func TestAuthLoginNoOpenPrintsURLOnly(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	stubRing(t, newFakeRing())
+	old := sporgh.OpenURL
+	t.Cleanup(func() { sporgh.OpenURL = old })
+	called := false
+	sporgh.OpenURL = func(_ string) error {
+		called = true
+		return nil
+	}
+	dir := initGitRepo(t, "feature", "https://github.com/octo/repo.git")
+
+	out, err := runGH(t, dir, "gh", "auth", "login", "--no-open")
+	require.NoError(t, err)
+	require.Contains(t, out, "personal-access-tokens/new")
+	require.False(t, called)
+}
+
+func TestAuthLoginWithoutRepoRemoteOmitsTarget(t *testing.T) {
+	t.Setenv("GH_TOKEN", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	stubRing(t, newFakeRing())
+	opened := stubOpenURL(t)
+	dir := initGitRepo(t, "feature", "git@gitlab.com:octo/repo.git")
+
+	_, err := runGH(t, dir, "gh", "auth", "login")
+	require.NoError(t, err)
+	require.Contains(t, *opened, "personal-access-tokens/new")
+	require.NotContains(t, *opened, "target_name")
 }
 
 func TestAuthLoginRejectsBothFlags(t *testing.T) {

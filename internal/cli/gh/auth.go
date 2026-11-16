@@ -26,8 +26,9 @@ func newLogin() *cobra.Command {
 		Args:  cobra.NoArgs,
 		RunE:  runLogin,
 	}
-	command.Flags().String("token", "", "store this token instead of printing setup guidance")
+	command.Flags().String("token", "", "store this token instead of opening the creation page")
 	command.Flags().Bool("import-gh", false, "copy the token the gh CLI already holds into the keyring")
+	command.Flags().Bool("no-open", false, "print the token creation URL without opening a browser")
 	return command
 }
 
@@ -52,6 +53,7 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 	if importGH && tokenFlagSet(token) {
 		return fmt.Errorf("login accepts only one of --token and --import-gh")
 	}
+
 	ring, err := sporgh.OpenRing()
 	if err != nil {
 		return fmt.Errorf("open system keyring: %w", err)
@@ -69,8 +71,38 @@ func runLogin(cmd *cobra.Command, _ []string) error {
 		}
 		return printStored(cmd, sporgh.SourceKeyring)
 	}
-	_, err = fmt.Fprint(cmd.OutOrStdout(), loginGuidance())
-	return err
+	return openTokenPage(cmd)
+}
+
+func openTokenPage(cmd *cobra.Command) error {
+	target := loginTarget(cmd)
+	rawURL := sporgh.NewTokenURL(sporgh.WatchTokenTemplate(target))
+	if _, err := fmt.Fprintf(cmd.OutOrStdout(), "%s\n", loginGuidance(rawURL)); err != nil {
+		return err
+	}
+	noOpen, err := cmd.Flags().GetBool("no-open")
+	if err != nil {
+		return err
+	}
+	if noOpen {
+		return nil
+	}
+	if err := sporgh.OpenURL(rawURL); err != nil {
+		_, _ = fmt.Fprintln(cmd.OutOrStdout(), "Could not open a browser; use the URL above.")
+	}
+	return nil
+}
+
+func loginTarget(cmd *cobra.Command) string {
+	repo, err := cmd.Flags().GetString("repo")
+	if err != nil {
+		return ""
+	}
+	owner, _, err := sporgh.OwnerRepo(cmd.Context(), repo)
+	if err != nil {
+		return ""
+	}
+	return owner
 }
 
 func tokenFlagSet(token string) bool {
@@ -102,11 +134,11 @@ func displayLogin(login string) string {
 	return login
 }
 
-func loginGuidance() string {
+func loginGuidance(rawURL string) string {
 	var guidance strings.Builder
 	guidance.WriteString("Create a read-only fine-grained personal access token:\n")
-	guidance.WriteString("  1. Open https://github.com/settings/personal-access-tokens/new\n")
-	guidance.WriteString("  2. Grant read access to Checks, Actions, Pull requests, Contents, and Metadata.\n")
+	guidance.WriteString("  1. Open " + rawURL + "\n")
+	guidance.WriteString("  2. Confirm read access to Checks, Actions, Pull requests, Contents, and Metadata.\n")
 	guidance.WriteString("  3. Store it with: spor gh auth login --token TOKEN\n")
 	guidance.WriteString("  Or copy the gh CLI token with: spor gh auth login --import-gh\n")
 	return guidance.String()
