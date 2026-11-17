@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -138,6 +139,7 @@ func ProcessPending(ctx context.Context, repoPath string) (bool, error) {
 	if !ok {
 		return false, nil
 	}
+	slog.InfoContext(ctx, "Processing request", "request", item.id, "kind", kindName(item.kind))
 	var result string
 	var dispatchErr error
 	if _, ok := item.kind.(kindRebase); ok {
@@ -147,6 +149,11 @@ func ProcessPending(ctx context.Context, repoPath string) (bool, error) {
 	}
 	if dispatchErr != nil {
 		result = "Error: " + dispatchErr.Error()
+	}
+	if dispatchErr != nil {
+		slog.ErrorContext(ctx, "Request failed", "request", item.id, "error", dispatchErr)
+	} else {
+		slog.InfoContext(ctx, "Request completed", "request", item.id, "result", result)
 	}
 	markErr := markDone(ctx, gitDir, item.id, result)
 	if markErr != nil {

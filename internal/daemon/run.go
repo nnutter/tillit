@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"log/slog"
 	"time"
 
 	"github.com/nnutter/spor/internal/auditor"
@@ -17,6 +18,8 @@ func Run(ctx context.Context, repoPath string) error {
 		return err
 	}
 	defer releaseWorktreeLock(lock)
+	slog.InfoContext(ctx, "Daemon started", "repo", repoPath)
+	defer slog.Info("Daemon stopped", "repo", repoPath)
 
 	ticker := time.NewTicker(200 * time.Millisecond)
 	defer ticker.Stop()

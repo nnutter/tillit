@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/go-git/go-git/v6"
@@ -257,6 +258,7 @@ func newTarget(repo *git.Repository, gitDir string, commit *object.Commit) (*fix
 }
 
 func fixAttempt(ctx context.Context, repo *git.Repository, db statedb, root, gitDir string, cfg config.Config, command []string, mode config.Mode, commit *object.Commit, target *fixTarget, attempt int) (*Outcome, *object.Commit, error) {
+	slog.InfoContext(ctx, "Attempting fixup", "commit", commit.Hash.String(), "attempt", attempt)
 	kind, err := runAgent(ctx, gitDir, cfg.Auditor, commit.Hash.String(), target.subject)
 	if err != nil {
 		return nil, commit, nil

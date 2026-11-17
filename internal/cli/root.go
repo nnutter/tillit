@@ -1,9 +1,9 @@
 package cli
 
 import (
+	"log/slog"
 	"os"
 
-	"github.com/charmbracelet/log"
 	"github.com/spf13/cobra"
 
 	"github.com/nnutter/spor/internal/cli/add"
@@ -19,7 +19,7 @@ import (
 
 // New builds the spor command tree.
 func New(version string) *cobra.Command {
-	log.SetDefault(log.NewWithOptions(os.Stderr, log.Options{ReportTimestamp: false}))
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	root := &cobra.Command{
 		Use:     "spor",
 		Short:   "Extract and validate refactor commits",

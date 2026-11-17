@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/nnutter/spor/internal/repository"
 )
@@ -62,7 +64,11 @@ func runCommand(ctx context.Context, gitDir string, command []string) (bool, err
 	cmd.Env = commandEnv()
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
+	hash, _ := gitOutput(ctx, dest, "rev-parse", "HEAD")
+	started := time.Now()
+	slog.InfoContext(ctx, "Starting validation", "commit", strings.TrimSpace(hash))
 	err = cmd.Run()
+	slog.InfoContext(ctx, "Validation finished", "commit", strings.TrimSpace(hash), "passed", err == nil, "duration", time.Since(started))
 	if err == nil {
 		return true, nil
 	}
