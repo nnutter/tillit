@@ -14,7 +14,7 @@ type operation struct {
 }
 
 func state(ctx context.Context, gitDir string) (*sql.DB, error) {
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(gitDir, "spor", "state.db"))
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(gitDir, "spor", "state.db")+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}

@@ -60,7 +60,7 @@ func openBranchReport(ctx context.Context, gitDir string) (*sql.DB, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	u := url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro&_pragma=busy_timeout(5000)"}
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, err

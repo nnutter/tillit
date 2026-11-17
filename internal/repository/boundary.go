@@ -18,7 +18,7 @@ func EnsureNoPendingIntegration(gitDir string) error {
 	} else if err != nil {
 		return err
 	}
-	db, err := sql.Open("sqlite", "file:"+path)
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func Boundary(gitDir string) (string, error) {
 	} else if err != nil {
 		return "", err
 	}
-	db, err := sql.Open("sqlite", "file:"+path)
+	db, err := sql.Open("sqlite", "file:"+path+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return "", err
 	}

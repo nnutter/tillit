@@ -80,7 +80,7 @@ func openVerificationState(ctx context.Context, path string, write bool) (*sql.D
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("create state directory: %w", err)
 	}
-	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: path}).String())
+	db, err := sql.Open("sqlite", (&url.URL{Scheme: "file", Path: path, RawQuery: "_pragma=busy_timeout(5000)"}).String())
 	if err != nil {
 		return nil, fmt.Errorf("open verification state: %w", err)
 	}
@@ -100,7 +100,7 @@ func openVerificationReport(ctx context.Context, path string) (*sql.DB, error) {
 	if err != nil {
 		return nil, fmt.Errorf("stat verification state: %w", err)
 	}
-	u := &url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro"}
+	u := &url.URL{Scheme: "file", Path: path, RawQuery: "mode=ro&_pragma=busy_timeout(5000)"}
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return nil, fmt.Errorf("open verification state: %w", err)

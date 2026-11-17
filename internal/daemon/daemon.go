@@ -235,7 +235,7 @@ func openState(ctx context.Context, gitDir string) (*sql.DB, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "state.db"))
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "state.db")+"?_pragma=busy_timeout(5000)")
 	if err != nil {
 		return nil, err
 	}
