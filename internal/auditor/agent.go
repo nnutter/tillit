@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -96,6 +97,7 @@ func stagedTreeHash(ctx context.Context, dest string) (string, error) {
 func commandCtx(ctx context.Context, dir, name string, args ...string) *exec.Cmd {
 	cmd := subprocess.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
+	cmd.Stdout, cmd.Stderr = os.Stderr, os.Stderr
 	return cmd
 }
 

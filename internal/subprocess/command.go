@@ -6,12 +6,24 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"syscall"
 )
+
+var supervised atomic.Bool
+
+// UseInheritedProcessGroup delegates process-group shutdown to a supervisor.
+func UseInheritedProcessGroup() {
+	supervised.Store(true)
+}
 
 // CommandContext stops the command and its process group when ctx is canceled.
 func CommandContext(ctx context.Context, name string, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, name, args...)
+	// The supervisor owns the worker's group and signals it as a unit.
+	if supervised.Load() {
+		return cmd
+	}
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)

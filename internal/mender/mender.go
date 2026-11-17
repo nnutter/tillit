@@ -2,9 +2,11 @@
 package mender
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -321,11 +323,14 @@ func runConflictAgent(ctx context.Context, dir string, model config.Auditor) err
 	cmd := subprocess.CommandContext(agentCtx, "pi", "-p", "--provider", model.Provider, "--model", model.Model, "--thinking", thinking, "--", prompt)
 	cmd.Dir = dir
 	cmd.Env = cleanEnv()
-	if out, err := cmd.CombinedOutput(); err != nil {
+	var out bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stderr, &out)
+	cmd.Stderr = cmd.Stdout
+	if err := cmd.Run(); err != nil {
 		if cause := context.Cause(agentCtx); cause != nil {
 			return fmt.Errorf("resolve conflict with pi: %w", cause)
 		}
-		return fmt.Errorf("resolve conflict with pi: %w: %s", err, strings.TrimSpace(string(out)))
+		return fmt.Errorf("resolve conflict with pi: %w: %s", err, strings.TrimSpace(out.String()))
 	}
 	return nil
 }
