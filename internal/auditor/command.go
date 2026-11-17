@@ -72,6 +72,9 @@ func runCommand(ctx context.Context, gitDir string, command []string) (bool, err
 	if err == nil {
 		return true, nil
 	}
+	if ctx.Err() != nil {
+		return false, ctx.Err()
+	}
 	if _, ok := errors.AsType[*exec.ExitError](err); ok {
 		return false, nil
 	}
