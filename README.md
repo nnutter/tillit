@@ -90,6 +90,9 @@ After the second rebase, Spor's branch matches the user's.
   Uncached results are pending; status does not run validation or verification.
 - `spor add` - Queues the staged changes for the daemon to process.
   `spor stage` is an alias for `spor add`.
+- `spor auto-submit` - Watches stable tracked working changes and queues immutable snapshots for the daemon.
+  The daemon extracts and validates refactor-only commits, then publishes them onto the current branch without writing working files.
+  Both processes must be running to enable automatic publication.
 - `spor reset` - Undoes the latest `spor add`.
 - `spor log` - Shows added commits that are not yet on the user's branch with validation status.
 - `spor rebase` - Queues integration of validated Spor commits into the current branch.
@@ -106,6 +109,45 @@ After the second rebase, Spor's branch matches the user's.
   It polls check runs and combined statuses, saves failure logs under the worktree Git directory, and prints the fetch commands to reproduce the pull request locally.
   `--once` polls a single time; `--interval` and `--timeout` control watching; `--logs-dir` selects where failure logs go.
 - `spor stop` - Stops the Spor daemon.
+
+## Automatic submission
+
+Run `spor daemon` in one terminal and `spor auto-submit` in another, in the same worktree.
+The watcher polls once per second and waits for two matching observations before submitting a snapshot.
+It uses an alternate index, so capturing working changes does not stage them in your index.
+Untracked files are excluded.
+
+The daemon extracts supported refactors from the snapshot without committing the unfinished feature changes that remain.
+It validates each exact candidate commit in its isolated checkout using the configured operational check.
+A passing check is validation, not a claim of semantic verification.
+Missing configuration, validation failures, or infrastructure errors prevent publication.
+This first version does not run fixup agents for auto-submissions; it will not automatically publish agent changes that are absent from your working files.
+
+Automatic publication requires an attached branch, a clean index, no Git operation in progress, and no unintegrated manual Spor commits.
+Sparse, skip-worktree, and assume-unchanged index entries are unsupported.
+Before publication, Spor checks that the captured branch, tip, index bytes, and tracked working snapshot still match.
+If you edit, stage, switch branches, or start a rebase during validation, Spor skips that candidate and the watcher can submit a fresh snapshot once the worktree is ready.
+A failed or skipped snapshot is not repeatedly submitted while its inputs remain unchanged.
+
+Publication advances the branch and replaces the index with the validated commit's tree, leaving working files untouched.
+The refactor disappears from your uncommitted diff, while unrelated working changes remain.
+Spor uses an exclusive Git index lock, a conditional branch update, and a SQLite publication journal in the worktree Git directory.
+On restart, the daemon completes or rolls back an interrupted publication when the recorded branch and index still match.
+If they no longer match, it logs an error instead of overwriting newer staging or another process's index lock.
+External Git commands and editor writes cannot be made atomic with publication; avoid changing branches or running Git mutations at the instant Spor publishes.
+
+Stopping `auto-submit` disables further automatic processing; an already-started publication can still finish.
+A crashed watcher loses its publication authorization after five seconds unless it is restarted.
+Manual `spor add`, `spor validate`, and `spor rebase` keep their existing behavior.
+Auto-submissions have separate state and never become manual submissions in `spor log` or `spor reset`.
+Without the watcher, the daemon does not extract working changes or initiate new automatic publications.
+Interrupted publications can still be recovered without a watcher.
+
+Both processes emit timestamped `log/slog` action logs on stderr.
+The daemon logs request processing, validation starts and results with commit hashes and durations, fixup attempts for manual submissions, and automatic publication or deferral.
+The watcher logs startup, working-change detection, submission, and changes in pause reasons such as staging or a rebase in progress.
+Unchanged polling states are not repeatedly logged.
+Validation command output also goes to stderr.
 
 ## Static Verification
 
