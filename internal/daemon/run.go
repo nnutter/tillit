@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"time"
 
@@ -14,6 +15,16 @@ import (
 // Run owns the spor worktree lock and polls queued requests until cancelled.
 // Only one daemon may hold the lock for a worktree at a time.
 func Run(ctx context.Context, repoPath string) error {
+	return run(ctx, repoPath, false)
+}
+
+// RunAuto runs the daemon and its auto-submit watcher in the same process.
+// It waits for both loops to stop before releasing the daemon lock.
+func RunAuto(ctx context.Context, repoPath string) error {
+	return run(ctx, repoPath, true)
+}
+
+func run(ctx context.Context, repoPath string, auto bool) error {
 	lock, err := acquireWorktreeLock(repoPath)
 	if err != nil {
 		return err
@@ -22,6 +33,31 @@ func Run(ctx context.Context, repoPath string) error {
 	slog.InfoContext(ctx, "Daemon started", "repo", repoPath)
 	defer slog.Info("Daemon stopped", "repo", repoPath)
 
+	if auto {
+		return pollWithWatcher(ctx, repoPath)
+	}
+	return poll(ctx, repoPath)
+}
+
+func pollWithWatcher(ctx context.Context, repoPath string) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	done := make(chan error, 1)
+	go func() {
+		err := autosubmit.Run(ctx, repoPath)
+		cancel()
+		done <- err
+	}()
+	err := poll(ctx, repoPath)
+	cancel()
+	watcherErr := <-done
+	if errors.Is(watcherErr, context.Canceled) {
+		watcherErr = nil
+	}
+	return errors.Join(err, watcherErr)
+}
+
+func poll(ctx context.Context, repoPath string) error {
 	var lastAutoError string
 	timer := time.NewTimer(200 * time.Millisecond)
 	defer timer.Stop()
@@ -34,7 +70,7 @@ func Run(ctx context.Context, repoPath string) error {
 		}
 		// Leave an idle interval even when validation took longer than a poll.
 		// Otherwise the daemon can continuously reacquire the writer lock and
-		// starve the separate auto-submit process.
+		// starve the auto-submit watcher.
 		timer.Reset(200 * time.Millisecond)
 		select {
 		case <-ctx.Done():

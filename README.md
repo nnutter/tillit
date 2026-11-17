@@ -85,6 +85,7 @@ After the second rebase, Spor's branch matches the user's.
 
 - `spor start` - Starts Spor daemon in the current Git worktree.
 - `spor daemon` - Runs the Spor daemon in the current Git worktree.
+  `--auto` also runs the auto-submit watcher inside the daemon process; `spor start --auto` is equivalent.
 - `spor status` - Displays the latest submission and recorded validation for every feature-branch commit selected from the branch boundary.
   It also displays independent static verification results for those exact commits.
   Uncached results are pending; status does not run validation or verification.
@@ -92,7 +93,7 @@ After the second rebase, Spor's branch matches the user's.
   `spor stage` is an alias for `spor add`.
 - `spor auto-submit` - Watches stable tracked working changes and queues immutable snapshots for the daemon.
   The daemon extracts and validates refactor-only commits, then publishes them onto the current branch without writing working files.
-  Both processes must be running to enable automatic publication.
+  Run it alongside `spor daemon`, or use `spor daemon --auto` to run both loops in one process.
 - `spor reset` - Undoes the latest `spor add`.
 - `spor log` - Shows added commits that are not yet on the user's branch with validation status.
 - `spor rebase` - Queues integration of validated Spor commits into the current branch.
@@ -112,7 +113,11 @@ After the second rebase, Spor's branch matches the user's.
 
 ## Automatic submission
 
-Run `spor daemon` in one terminal and `spor auto-submit` in another, in the same worktree.
+Run `spor daemon --auto` to watch, validate, and publish supported working refactors in a single process.
+Alternatively, run `spor daemon` in one terminal and `spor auto-submit` in another, in the same worktree.
+Plain `spor daemon` does not start a watcher.
+In `--auto` mode, stopping the daemon also stops its watcher and waits for it to release its lock and publication authorization.
+A watcher failure stops the combined daemon and returns an error; an already-running standalone watcher causes `spor daemon --auto` to fail rather than start a second watcher.
 The watcher polls once per second and waits for two matching observations before submitting a snapshot.
 It uses an alternate index, so capturing working changes does not stage them in your index.
 Untracked files are excluded.
@@ -143,7 +148,7 @@ Auto-submissions have separate state and never become manual submissions in `spo
 Without the watcher, the daemon does not extract working changes or initiate new automatic publications.
 Interrupted publications can still be recovered without a watcher.
 
-Both processes emit timestamped `log/slog` action logs on stderr.
+The daemon and watcher emit timestamped `log/slog` action logs on stderr, whether run separately or together with `--auto`.
 The daemon logs request processing, validation starts and results with commit hashes and durations, fixup attempts for manual submissions, and automatic publication or deferral.
 The watcher logs startup, working-change detection, submission, and changes in pause reasons such as staging or a rebase in progress.
 Unchanged polling states are not repeatedly logged.
