@@ -34,11 +34,33 @@ func TestRunAutoReturnsWatcherFailureAndReleasesDaemon(t *testing.T) {
 	// Bound the test if a regression starts the daemon without its watcher.
 	attempt, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
-	require.ErrorContains(t, daemon.RunAuto(attempt, dir), "auto-submit is already running")
+	ready := make(chan struct{}, 1)
+	err = daemon.RunReady(attempt, dir, true, func() { ready <- struct{}{} })
+	require.ErrorContains(t, err, "auto-submit is already running")
+	require.Empty(t, ready)
 	// A plain daemon can still run alongside the existing watcher after failure.
 	once, stopDaemon := context.WithCancel(t.Context())
 	stopDaemon()
 	require.NoError(t, daemon.Run(once, dir))
+}
+
+func TestRunAutoReadyOwnsWatcher(t *testing.T) {
+	dir, _ := branchRepo(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	ready := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- daemon.RunReady(ctx, dir, true, func() { close(ready) }) }()
+	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
+	select {
+	case <-ready:
+	case err := <-done:
+		done <- err
+		require.NoError(t, err)
+		require.FailNow(t, "daemon stopped before readiness")
+	case <-time.After(10 * time.Second):
+		require.FailNow(t, "daemon did not become ready")
+	}
+	require.ErrorContains(t, autosubmit.Run(t.Context(), dir), "already running")
 }
 
 func TestRunAutoDoesNotStartWatcherWhenDaemonAlreadyRunning(t *testing.T) {

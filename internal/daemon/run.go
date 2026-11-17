@@ -15,16 +15,21 @@ import (
 // Run owns the spor worktree lock and polls queued requests until cancelled.
 // Only one daemon may hold the lock for a worktree at a time.
 func Run(ctx context.Context, repoPath string) error {
-	return run(ctx, repoPath, false)
+	return run(ctx, repoPath, false, nil)
 }
 
 // RunAuto runs the daemon and its auto-submit watcher in the same process.
 // It waits for both loops to stop before releasing the daemon lock.
 func RunAuto(ctx context.Context, repoPath string) error {
-	return run(ctx, repoPath, true)
+	return run(ctx, repoPath, true, nil)
 }
 
-func run(ctx context.Context, repoPath string, auto bool) error {
+// RunReady calls ready once the daemon and any requested watcher are ready.
+func RunReady(ctx context.Context, repoPath string, auto bool, ready func()) error {
+	return run(ctx, repoPath, auto, ready)
+}
+
+func run(ctx context.Context, repoPath string, auto bool, ready func()) error {
 	lock, err := acquireWorktreeLock(repoPath)
 	if err != nil {
 		return err
@@ -34,17 +39,20 @@ func run(ctx context.Context, repoPath string, auto bool) error {
 	defer slog.Info("Daemon stopped", "repo", repoPath)
 
 	if auto {
-		return pollWithWatcher(ctx, repoPath)
+		return pollWithWatcher(ctx, repoPath, ready)
+	}
+	if ready != nil {
+		ready()
 	}
 	return poll(ctx, repoPath)
 }
 
-func pollWithWatcher(ctx context.Context, repoPath string) error {
+func pollWithWatcher(ctx context.Context, repoPath string, ready func()) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		err := autosubmit.Run(ctx, repoPath)
+		err := autosubmit.RunReady(ctx, repoPath, ready)
 		cancel()
 		done <- err
 	}()

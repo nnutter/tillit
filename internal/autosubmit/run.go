@@ -15,6 +15,11 @@ import (
 // Run watches tracked working changes until cancellation. Only one watcher may
 // run per worktree. Its heartbeat authorizes publication only while it is alive.
 func Run(ctx context.Context, start string) error {
+	return RunReady(ctx, start, nil)
+}
+
+// RunReady calls ready after the watcher lock and first heartbeat are acquired.
+func RunReady(ctx context.Context, start string, ready func()) error {
 	root, dir, err := location(start)
 	if err != nil {
 		return err
@@ -38,6 +43,10 @@ func Run(ctx context.Context, start string) error {
 	for {
 		if err := heartbeat(ctx, db); err != nil {
 			return err
+		}
+		if ready != nil {
+			ready()
+			ready = nil
 		}
 		message, fingerprint := watchPoll(ctx, root, dir, previous)
 		previous = fingerprint
