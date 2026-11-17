@@ -22,6 +22,7 @@ node = "24"
 "npm:oxlint" = "latest"
 "npm:pele" = "1.13.0"
 "npm:typescript" = "latest"
+uv = "latest"
 
 [env]
 # Test and build temporaries stay out of ./... because the Go tool
