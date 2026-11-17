@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"runtime/debug"
 	"syscall"
 
 	"charm.land/fang/v2"
@@ -13,8 +14,33 @@ import (
 	"github.com/nnutter/spor/internal/daemon"
 )
 
-// version is the spor release. Set it with -X at build time.
-var version = "0.2.0"
+// version is the spor release. Set it at build time with
+// -ldflags "-X main.version=vX.Y.Z".
+var version string
+
+// resolveVersion prefers the build-time version and falls back to the module
+// version embedded in the binary.
+func resolveVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && hasBuildVersion(info.Main.Version) {
+		return info.Main.Version
+	}
+	return "dev"
+}
+
+func hasBuildVersion(v string) bool {
+	return isTaggedVersion(v) && isReleasedVersion(v)
+}
+
+func isTaggedVersion(v string) bool {
+	return v != ""
+}
+
+func isReleasedVersion(v string) bool {
+	return v != "(devel)"
+}
 
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
@@ -33,7 +59,7 @@ func main() {
 		}
 		return
 	}
-	if err := fang.Execute(ctx, cli.New(version), fang.WithVersion(version)); err != nil {
+	if err := fang.Execute(ctx, cli.New(resolveVersion()), fang.WithVersion(resolveVersion())); err != nil {
 		os.Exit(1)
 	}
 }
