@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/spor/internal/subprocess"
 )
 
 func checkout(ctx context.Context, gitDir, hash string) error {
@@ -59,7 +60,7 @@ func runCommand(ctx context.Context, gitDir string, command []string) (bool, err
 	if err != nil {
 		return false, err
 	}
-	cmd := exec.CommandContext(ctx, command[0], command[1:]...)
+	cmd := subprocess.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = dest
 	cmd.Env = commandEnv()
 	cmd.Stdout = os.Stderr

@@ -14,6 +14,7 @@ import (
 	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/config"
 	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/spor/internal/subprocess"
 )
 
 // Rebase prepares validated commits in an isolated worktree and publishes them
@@ -317,7 +318,7 @@ func runConflictAgent(ctx context.Context, dir string, model config.Auditor) err
 	prompt := "Resolve the current Git cherry-pick conflicts in this checkout. Preserve the intended changes, stage the resolutions, and do not commit."
 	agentCtx, cancel := context.WithTimeoutCause(ctx, 10*time.Minute, fmt.Errorf("conflict agent timed out"))
 	defer cancel()
-	cmd := exec.CommandContext(agentCtx, "pi", "-p", "--provider", model.Provider, "--model", model.Model, "--thinking", thinking, "--", prompt)
+	cmd := subprocess.CommandContext(agentCtx, "pi", "-p", "--provider", model.Provider, "--model", model.Model, "--thinking", thinking, "--", prompt)
 	cmd.Dir = dir
 	cmd.Env = cleanEnv()
 	if out, err := cmd.CombinedOutput(); err != nil {

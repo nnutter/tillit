@@ -18,6 +18,7 @@ func TestRunCommandCancellationIsNotValidationFailure(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.MkdirAll(dest, 0o755))
 	started := filepath.Join(t.TempDir(), "started")
+	descendantOutput := filepath.Join(t.TempDir(), "descendant")
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	type result struct {
@@ -26,7 +27,7 @@ func TestRunCommandCancellationIsNotValidationFailure(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		passed, err := runCommand(ctx, gitDir, []string{"sh", "-c", "touch \"$1\"; exec sleep 60", "sh", started})
+		passed, err := runCommand(ctx, gitDir, []string{"sh", "-c", "(sleep 1; touch \"$2\") & touch \"$1\"; wait", "sh", started, descendantOutput})
 		done <- result{passed, err}
 	}()
 	require.Eventually(t, func() bool {
@@ -41,4 +42,7 @@ func TestRunCommandCancellationIsNotValidationFailure(t *testing.T) {
 	case <-time.After(10 * time.Second):
 		require.FailNow(t, "validation did not stop")
 	}
+	time.Sleep(1500 * time.Millisecond)
+	_, err = os.Stat(descendantOutput)
+	require.ErrorIs(t, err, os.ErrNotExist)
 }

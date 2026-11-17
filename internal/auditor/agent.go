@@ -10,6 +10,7 @@ import (
 
 	"github.com/nnutter/spor/internal/config"
 	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/spor/internal/subprocess"
 )
 
 // OutcomeKind is the kind of one fixup attempt.
@@ -93,7 +94,7 @@ func stagedTreeHash(ctx context.Context, dest string) (string, error) {
 }
 
 func commandCtx(ctx context.Context, dir, name string, args ...string) *exec.Cmd {
-	cmd := exec.CommandContext(ctx, name, args...)
+	cmd := subprocess.CommandContext(ctx, name, args...)
 	cmd.Dir = dir
 	return cmd
 }
