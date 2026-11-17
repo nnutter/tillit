@@ -83,9 +83,12 @@ After the second rebase, Spor's branch matches the user's.
 
 ## Spor Commands
 
-- `spor start` - Starts Spor daemon in the current Git worktree.
-- `spor daemon` - Runs the Spor daemon in the current Git worktree.
-  `--auto` also runs the auto-submit watcher inside the daemon process; `spor start --auto` is equivalent.
+- `spor start` - Starts the Spor daemon in the background for the current Git worktree.
+  `--auto` also starts the auto-submit watcher in that daemon.
+  It prints the daemon log path after the daemon and any requested watcher are ready.
+- `spor daemon` - Runs the Spor daemon in the foreground in the current Git worktree.
+  `--auto` also runs the auto-submit watcher inside the daemon process.
+  Foreground output stays on the terminal.
 - `spor status` - Displays the latest submission and recorded validation for every feature-branch commit selected from the branch boundary.
   It also displays independent static verification results for those exact commits.
   Uncached results are pending; status does not run validation or verification.
@@ -109,14 +112,20 @@ After the second rebase, Spor's branch matches the user's.
 - `spor gh watch-pr` - Watches the pull request for the current feature branch.
   It polls check runs and combined statuses, saves failure logs under the worktree Git directory, and prints the fetch commands to reproduce the pull request locally.
   `--once` polls a single time; `--interval` and `--timeout` control watching; `--logs-dir` selects where failure logs go.
-- `spor stop` - Stops the Spor daemon.
+- `spor stop` - Stops the background daemon for the current Git worktree.
+  It asks the daemon to shut down and waits for it to exit.
+  `--kill` force-stops an unresponsive daemon and the validation or agent processes it started.
+  It does not stop a separately started `spor auto-submit` process.
 
 ## Automatic submission
 
-Run `spor daemon --auto` to watch, validate, and publish supported working refactors in a single process.
+Run `spor start --auto` to watch, validate, and publish supported working refactors in the background.
+`spor daemon --auto` does the same work in the foreground.
 Alternatively, run `spor daemon` in one terminal and `spor auto-submit` in another, in the same worktree.
-Plain `spor daemon` does not start a watcher.
+Plain `spor daemon` and `spor start` do not start a watcher.
 In `--auto` mode, stopping the daemon also stops its watcher and waits for it to release its lock and publication authorization.
+`spor stop` performs that shutdown for a background daemon.
+A foreground daemon stops on interrupt or SIGTERM.
 A watcher failure stops the combined daemon and returns an error; an already-running standalone watcher causes `spor daemon --auto` to fail rather than start a second watcher.
 The watcher polls once per second and waits for two matching observations before submitting a snapshot.
 It uses an alternate index, so capturing working changes does not stage them in your index.
@@ -148,11 +157,17 @@ Auto-submissions have separate state and never become manual submissions in `spo
 Without the watcher, the daemon does not extract working changes or initiate new automatic publications.
 Interrupted publications can still be recovered without a watcher.
 
-The daemon and watcher emit timestamped `log/slog` action logs on stderr, whether run separately or together with `--auto`.
+A background daemon writes its output, including validation and agent output, to `spor/daemon.log` under the worktree Git directory.
+Spor rotates that log at 5 MiB and keeps three backups, so one worktree retains about 20 MiB.
+The log is readable only by its owner and can contain command output.
+Follow it across rotation with `tail -F` on the path printed by `spor start`.
+`spor log` still shows commit history, not this process log.
+A foreground `spor daemon` keeps writing timestamped `log/slog` action logs to stderr, whether run separately or together with `--auto`.
 The daemon logs request processing, validation starts and results with commit hashes and durations, fixup attempts for manual submissions, and automatic publication or deferral.
 The watcher logs startup, working-change detection, submission, and changes in pause reasons such as staging or a rebase in progress.
 Unchanged polling states are not repeatedly logged.
-Validation command output also goes to stderr.
+In the foreground, validation command output also goes to stderr.
+In the background, that output goes to the daemon log.
 
 ## Static Verification
 
