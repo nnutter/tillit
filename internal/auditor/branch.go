@@ -147,19 +147,3 @@ func runBranchCommand(ctx context.Context, gitDir string, command []string, outc
 	}
 	return outcome
 }
-
-func prepareBranchCheckout(ctx context.Context, gitDir, dest, hash string) error {
-	ready, err := worktreeReady(dest)
-	if err != nil {
-		return err
-	}
-	if ready {
-		if err := runGit(ctx, dest, "clean", "-ffdx"); err != nil {
-			return err
-		}
-	}
-	if err := checkout(ctx, gitDir, hash); err != nil {
-		return err
-	}
-	return runGit(ctx, dest, "clean", "-ffdx")
-}

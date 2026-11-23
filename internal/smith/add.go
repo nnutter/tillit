@@ -2,13 +2,11 @@ package smith
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"time"
-	"uuid"
 
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
@@ -25,12 +23,6 @@ const (
 	outcomeCommits = "commits"
 	outcomeNone    = "no-refactors"
 )
-
-// Commit is one commit written to the spor ref.
-type Commit struct {
-	Hash    string
-	Subject string
-}
 
 // Result is the latest submission, or the reason there is nothing to show.
 type Result struct {
@@ -414,19 +406,6 @@ func shortHash(hash string) string {
 		return hash
 	}
 	return hash[:12]
-}
-
-func newSporID() string {
-	id := uuid.New()
-	return "S" + hex.EncodeToString(id[:])
-}
-
-func toCommits(made []madeCommit) []Commit {
-	out := make([]Commit, len(made))
-	for i, commit := range made {
-		out[i] = Commit{Hash: commit.hash.String(), Subject: commit.subject}
-	}
-	return out
 }
 
 func toStored(commits []Commit) []storedCommit {

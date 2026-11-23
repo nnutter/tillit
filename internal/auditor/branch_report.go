@@ -106,18 +106,3 @@ func branchReportOutcome(ctx context.Context, db *sql.DB, gitDir string, commit 
 	}
 	return out, nil
 }
-
-func historicalConfig(commit *object.Commit) ([]byte, error) {
-	file, err := commit.File(".spor/config.json")
-	if errors.Is(err, object.ErrFileNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	content, err := file.Contents()
-	if err != nil {
-		return nil, err
-	}
-	return []byte(content), nil
-}
