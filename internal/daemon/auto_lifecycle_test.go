@@ -35,7 +35,7 @@ func TestRunAutoReturnsWatcherFailureAndReleasesDaemon(t *testing.T) {
 	attempt, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 	defer cancel()
 	ready := make(chan struct{}, 1)
-	err = daemon.RunReady(attempt, dir, true, func() { ready <- struct{}{} })
+	err = daemon.RunReady(attempt, dir, func() { ready <- struct{}{} })
 	require.ErrorContains(t, err, "auto-submit is already running")
 	require.Empty(t, ready)
 	// A plain daemon can still run alongside the existing watcher after failure.
@@ -49,7 +49,7 @@ func TestRunAutoReadyOwnsWatcher(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	ready := make(chan struct{})
 	done := make(chan error, 1)
-	go func() { done <- daemon.RunReady(ctx, dir, true, func() { close(ready) }) }()
+	go func() { done <- daemon.RunReady(ctx, dir, func() { close(ready) }) }()
 	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
 	select {
 	case <-ready:
@@ -73,7 +73,7 @@ func TestRunAutoDoesNotStartWatcherWhenDaemonAlreadyRunning(t *testing.T) {
 		_, err := os.Stat(logPath)
 		return err == nil
 	}, 5*time.Second, 10*time.Millisecond)
-	require.ErrorIs(t, daemon.RunAuto(t.Context(), dir), daemon.ErrAlreadyRunning)
+	require.ErrorIs(t, daemon.RunReady(t.Context(), dir, nil), daemon.ErrAlreadyRunning)
 	_, err := os.Stat(filepath.Join(dir, ".git", "spor", "auto-submit.lock"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }

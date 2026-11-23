@@ -18,15 +18,9 @@ func Run(ctx context.Context, repoPath string) error {
 	return run(ctx, repoPath, false, nil)
 }
 
-// RunAuto runs the daemon and its auto-submit watcher in the same process.
-// It waits for both loops to stop before releasing the daemon lock.
-func RunAuto(ctx context.Context, repoPath string) error {
-	return run(ctx, repoPath, true, nil)
-}
-
-// RunReady calls ready once the daemon and any requested watcher are ready.
-func RunReady(ctx context.Context, repoPath string, auto bool, ready func()) error {
-	return run(ctx, repoPath, auto, ready)
+// RunReady runs the watcher and calls ready once it has acquired its lock.
+func RunReady(ctx context.Context, repoPath string, ready func()) error {
+	return run(ctx, repoPath, true, ready)
 }
 
 func run(ctx context.Context, repoPath string, auto bool, ready func()) error {
@@ -56,13 +50,27 @@ func pollWithWatcher(ctx context.Context, repoPath string, ready func()) error {
 		cancel()
 		done <- err
 	}()
-	err := poll(ctx, repoPath)
+	err := pollAutomatic(ctx, repoPath)
 	cancel()
 	watcherErr := <-done
 	if errors.Is(watcherErr, context.Canceled) {
 		watcherErr = nil
 	}
 	return errors.Join(err, watcherErr)
+}
+
+func pollAutomatic(ctx context.Context, repoPath string) error {
+	var lastAutoError string
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			lastAutoError = processAuto(ctx, repoPath, lastAutoError)
+		}
+	}
 }
 
 func poll(ctx context.Context, repoPath string) error {

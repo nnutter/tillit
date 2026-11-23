@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ func TestDaemonAutoPublishesAndStopsItsWatcher(t *testing.T) {
 	base, err := repo.Head()
 	require.NoError(t, err)
 	root := cli.New("test")
-	root.SetArgs([]string{"--repo", dir, "daemon", "--auto"})
+	root.SetArgs([]string{"--repo", dir, "start", "--foreground"})
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- root.ExecuteContext(ctx) }()
@@ -37,6 +38,10 @@ func TestDaemonAutoPublishesAndStopsItsWatcher(t *testing.T) {
 		}
 		return head.Hash() != base.Hash()
 	}, 15*time.Second, 50*time.Millisecond)
+	require.Eventually(t, func() bool {
+		out, err := runCLI(t, dir, "status")
+		return err == nil && strings.Contains(out, "watcher: running") && strings.Contains(out, "published")
+	}, 5*time.Second, 20*time.Millisecond)
 	content, err := os.ReadFile(filepath.Join(dir, "main.go"))
 	require.NoError(t, err)
 	assert.Equal(t, after, string(content))
@@ -59,12 +64,4 @@ func TestDaemonAutoPublishesAndStopsItsWatcher(t *testing.T) {
 		}
 		return count == 0
 	}, 5*time.Second, 10*time.Millisecond)
-}
-
-func TestDaemonAutoDefaultsOff(t *testing.T) {
-	cmd, _, err := cli.New("test").Find([]string{"daemon"})
-	require.NoError(t, err)
-	auto, err := cmd.Flags().GetBool("auto")
-	require.NoError(t, err)
-	assert.False(t, auto)
 }

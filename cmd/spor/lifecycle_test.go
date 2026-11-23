@@ -42,7 +42,8 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 			_ = cmd.Run()
 		}
 	})
-	out, err := call(repo, "start", "--auto")
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "main.go"), []byte("package p\nfunc f() int { y := 1; return y }\n"), 0o644))
+	out, err := call(repo, "start")
 	require.NoError(t, err, "%s", out)
 	logPath := filepath.Join(repo, ".git", "spor", "daemon.log")
 	require.Contains(t, out, logPath)
@@ -53,7 +54,7 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 		data, _ := os.ReadFile(logPath)
 		return strings.Contains(string(data), "validation-output")
 	}, 10*time.Second, 20*time.Millisecond)
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(repo, ".git", "spor", "state.db"))
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(repo, ".git", "spor", "state.db")+"?_pragma=busy_timeout(5000)")
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	var count int
@@ -106,6 +107,7 @@ func TestStopKillStopsValidationDescendants(t *testing.T) {
 	cmd.Dir, cmd.Env = repo, env
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "%s", out)
+	require.NoError(t, os.WriteFile(filepath.Join(repo, "main.go"), []byte("package p\nfunc f() int { y := 1; return y }\n"), 0o644))
 	t.Cleanup(func() {
 		stop := exec.Command(bin, "--repo", repo, "stop", "--kill")
 		stop.Env = env
@@ -164,7 +166,9 @@ func newLifecycleRepo(t *testing.T, env []string) string {
 	git("config", "user.name", "Test")
 	git("config", "user.email", "test@example.com")
 	git("config", "commit.gpgsign", "false")
-	git("commit", "--allow-empty", "-m", "base")
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte("package p\nfunc f() int { x := 1; return x }\n"), 0o644))
+	git("add", "main.go")
+	git("commit", "-m", "base")
 	baseCommit := git("rev-parse", "HEAD")
 	git("update-ref", "refs/remotes/origin/main", baseCommit)
 	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")

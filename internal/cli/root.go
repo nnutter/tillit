@@ -7,7 +7,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nnutter/spor/internal/cli/add"
-	autocmd "github.com/nnutter/spor/internal/cli/autosubmit"
 	"github.com/nnutter/spor/internal/cli/config"
 	clicmd "github.com/nnutter/spor/internal/cli/daemon"
 	cligh "github.com/nnutter/spor/internal/cli/gh"
@@ -28,6 +27,6 @@ func New(version string) *cobra.Command {
 		Args:    cobra.NoArgs,
 	}
 	root.PersistentFlags().String("repo", ".", "path to the git worktree")
-	root.AddCommand(add.New(), status.New(), validate.New(), config.New(), reset.New(), logcmd.New(), clicmd.New(), clicmd.Start(), clicmd.Stop(), rebase.New(), cligh.New(), autocmd.New())
+	root.AddCommand(add.New(), status.New(), validate.New(), config.New(), reset.New(), logcmd.New(), clicmd.Start(), clicmd.Stop(), rebase.New(), cligh.New())
 	return root
 }

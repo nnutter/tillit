@@ -8,32 +8,23 @@ import (
 	daemoncore "github.com/nnutter/spor/internal/daemon"
 )
 
-// New builds the daemon command.
-func New() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "daemon",
-		Short: "Run the spor daemon",
-		Args:  cobra.NoArgs,
-		RunE:  run,
-	}
-	cmd.Flags().Bool("auto", false, "Watch working changes and automatically publish validated refactors")
-	return cmd
-}
-
-// Start builds the detached start command.
+// Start builds the start command.
 func Start() *cobra.Command {
 	cmd := &cobra.Command{
-		Use: "start", Short: "Start the daemon in the background", Args: cobra.NoArgs,
+		Use: "start", Short: "Start the refactor watcher", Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			repo, err := cmd.Flags().GetString("repo")
 			if err != nil {
 				return err
 			}
-			auto, err := cmd.Flags().GetBool("auto")
+			foreground, err := cmd.Flags().GetBool("foreground")
 			if err != nil {
 				return err
 			}
-			path, err := daemoncore.Start(cmd.Context(), repo, auto)
+			if foreground {
+				return daemoncore.RunReady(cmd.Context(), repo, nil)
+			}
+			path, err := daemoncore.Start(cmd.Context(), repo)
 			if err != nil {
 				return err
 			}
@@ -41,7 +32,7 @@ func Start() *cobra.Command {
 			return err
 		},
 	}
-	cmd.Flags().Bool("auto", false, "Watch working changes and automatically publish validated refactors")
+	cmd.Flags().Bool("foreground", false, "Run in the foreground until interrupted")
 	return cmd
 }
 
@@ -63,19 +54,4 @@ func Stop() *cobra.Command {
 	}
 	cmd.Flags().Bool("kill", false, "Force stop an unresponsive daemon")
 	return cmd
-}
-
-func run(cmd *cobra.Command, _ []string) error {
-	repo, err := cmd.Flags().GetString("repo")
-	if err != nil {
-		return err
-	}
-	auto, err := cmd.Flags().GetBool("auto")
-	if err != nil {
-		return err
-	}
-	if auto {
-		return daemoncore.RunAuto(cmd.Context(), repo)
-	}
-	return daemoncore.Run(cmd.Context(), repo)
 }
