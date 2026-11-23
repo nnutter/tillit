@@ -186,7 +186,6 @@ func linkedWorktree(t *testing.T, repo string) string {
 		"-c", "commit.gpgsign=false",
 		"worktree", "add", "--detach", dest, "HEAD",
 	)
-	cmd.Env = withoutGitEnv(os.Environ())
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 	return dest
@@ -203,27 +202,4 @@ func worktreeGitDir(t *testing.T, worktree string) string {
 		gitDir = filepath.Join(worktree, gitDir)
 	}
 	return gitDir
-}
-
-func withoutGitEnv(env []string) []string {
-	filtered := make([]string, 0, len(env))
-	for _, entry := range env {
-		key, _, _ := strings.Cut(entry, "=")
-		if gitEnvKey(key) {
-			continue
-		}
-		filtered = append(filtered, entry)
-	}
-	return filtered
-}
-
-func gitEnvKey(key string) bool {
-	switch key {
-	case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR",
-		"GIT_OBJECT_DIRECTORY", "GIT_ALTERNATE_OBJECT_DIRECTORIES",
-		"GIT_PREFIX", "GIT_EXEC_PATH", "GIT_SEQUENCE_EDITOR":
-		return true
-	default:
-		return false
-	}
 }

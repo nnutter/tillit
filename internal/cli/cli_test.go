@@ -19,6 +19,7 @@ import (
 	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/cli"
 	"github.com/nnutter/spor/internal/daemon"
+	"github.com/nnutter/spor/internal/testutil"
 )
 
 func TestAddAndStatusPrintTheSubmission(t *testing.T) {
@@ -115,7 +116,7 @@ func TestStatusWithNoSubmission(t *testing.T) {
 }
 
 func TestAddRejectsAMissingRepository(t *testing.T) {
-	scrubGitEnv(t)
+	testutil.IsolateGit(t)
 	t.Setenv("HOME", t.TempDir())
 	outside, err := os.MkdirTemp("/tmp", "spor-cli-")
 	require.NoError(t, err)
@@ -393,7 +394,7 @@ func repoWithStagedRename(t *testing.T) string {
 
 func initRepo(t *testing.T, committed, staged []byte) string {
 	t.Helper()
-	scrubGitEnv(t)
+	testutil.IsolateGit(t)
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	repo, err := git.PlainInit(dir, false)
@@ -515,23 +516,6 @@ func logLines(t *testing.T, path string) []string {
 		return nil
 	}
 	return strings.Split(text, "\n")
-}
-
-func scrubGitEnv(t *testing.T) {
-	t.Helper()
-	for _, key := range []string{
-		"GIT_DIR",
-		"GIT_WORK_TREE",
-		"GIT_INDEX_FILE",
-		"GIT_COMMON_DIR",
-		"GIT_OBJECT_DIRECTORY",
-		"GIT_ALTERNATE_OBJECT_DIRECTORIES",
-		"GIT_PREFIX",
-		"GIT_EXEC_PATH",
-		"GIT_SEQUENCE_EDITOR",
-	} {
-		t.Setenv(key, "")
-	}
 }
 
 const before = `package p
