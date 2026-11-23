@@ -20,7 +20,6 @@ yamlfmt = "latest"
 node = "24"
 "npm:oxfmt" = "latest"
 "npm:oxlint" = "latest"
-"npm:pele" = "1.13.0"
 "npm:typescript" = "latest"
 uv = "latest"
 
@@ -45,12 +44,6 @@ run = "go test -race -shuffle=on ./..."
 [tasks.coverage]
 description = "Run tests and generate coverage report"
 run = "go test -coverprofile=coverage.out -covermode=atomic ./... && go tool cover -func=coverage.out"
-
-[tasks.diagrams]
-description = "Build the README diagram SVGs with Pele"
-sources = ["docs/diagrams/*.mmd", "scripts/render-diagrams.mjs"]
-outputs = ["docs/diagrams/*.svg"]
-run = "node scripts/render-diagrams.mjs"
 
 [tasks.fix]
 description = "Fix all files, or only the supplied files"
