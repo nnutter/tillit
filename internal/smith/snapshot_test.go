@@ -23,7 +23,4 @@ func TestExtractSnapshotOmitsRemainderAndManualSubmission(t *testing.T) {
 	require.Equal(t, renamePeeled, fileText(t, commit, "main.go"))
 	require.Equal(t, base, headHash(t, repo))
 	require.Equal(t, index, indexSnapshot(t, repo))
-	status, err := smith.Status(t.Context(), dir)
-	require.NoError(t, err)
-	require.Empty(t, status.Commits)
 }

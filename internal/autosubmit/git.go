@@ -11,8 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/go-git/go-git/v6/plumbing"
+
 	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/smith"
 )
 
 func git(ctx context.Context, root, index string, args ...string) (string, error) {
@@ -76,14 +77,82 @@ func safeState(ctx context.Context, root, dir string) (string, string, error) {
 			return "", "", err
 		}
 	}
-	pending, err := smith.Log(ctx, root)
+	ref := repository.HeadRef(dir)
+	refs, err := git(ctx, root, "", "for-each-ref", "--format=%(refname)", ref)
 	if err != nil {
 		return "", "", err
 	}
-	if len(pending) > 0 {
-		return "", "", fmt.Errorf("manual Spor commits await integration")
+	for name := range strings.SplitSeq(refs, "\n") {
+		if name != ref {
+			continue
+		}
+		pending, err := pendingManual(ctx, root, dir, ref)
+		if err != nil {
+			return "", "", err
+		}
+		if pending {
+			return "", "", fmt.Errorf("manual Spor commits await integration; use a previous Spor version or resolve them safely before continuing")
+		}
 	}
 	return cleanBranch(ctx, root, dir)
+}
+
+// pendingManual follows the legacy Spor chain up to its recorded integration
+// boundary. A rebased integration need not leave its original hashes on HEAD.
+func pendingManual(ctx context.Context, root, dir, ref string) (bool, error) {
+	boundary, err := repository.Boundary(dir)
+	if err != nil {
+		return false, err
+	}
+	ahead, err := git(ctx, root, "", "rev-list", ref, "--not", "HEAD")
+	if err != nil {
+		return false, err
+	}
+	unreachable := hashSet(ahead)
+	repo, _, err := repository.Open(root)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = repo.Close() }()
+	legacy, err := repo.Reference(plumbing.ReferenceName(ref), true)
+	if err != nil {
+		return false, err
+	}
+	hash := legacy.Hash()
+	for hash.String() != boundary {
+		commit, err := repo.CommitObject(hash)
+		if err != nil {
+			return false, err
+		}
+		if !hasSporID(commit.Message) {
+			break
+		}
+		if unreachable[hash.String()] {
+			return true, nil
+		}
+		if len(commit.ParentHashes) == 0 {
+			break
+		}
+		hash = commit.ParentHashes[0]
+	}
+	return false, nil
+}
+
+func hashSet(lines string) map[string]bool {
+	set := make(map[string]bool)
+	for hash := range strings.SplitSeq(lines, "\n") {
+		set[hash] = true
+	}
+	return set
+}
+
+func hasSporID(message string) bool {
+	for line := range strings.SplitSeq(message, "\n") {
+		if strings.HasPrefix(line, "Spor-Id: ") {
+			return true
+		}
+	}
+	return false
 }
 
 func cleanBranch(ctx context.Context, root, dir string) (string, string, error) {

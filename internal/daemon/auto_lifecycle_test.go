@@ -64,15 +64,12 @@ func TestRunAutoReadyOwnsWatcher(t *testing.T) {
 }
 
 func TestRunAutoDoesNotStartWatcherWhenDaemonAlreadyRunning(t *testing.T) {
-	dir, logPath := branchRepo(t)
+	dir, _ := branchRepo(t)
 	ctx, cancel := context.WithCancel(t.Context())
 	done := make(chan error, 1)
 	go func() { done <- daemon.Run(ctx, dir) }()
 	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
-	require.Eventually(t, func() bool {
-		_, err := os.Stat(logPath)
-		return err == nil
-	}, 5*time.Second, 10*time.Millisecond)
+	require.Eventually(t, func() bool { return lockExists(t, dir) }, 5*time.Second, 10*time.Millisecond)
 	require.ErrorIs(t, daemon.RunReady(t.Context(), dir, nil), daemon.ErrAlreadyRunning)
 	_, err := os.Stat(filepath.Join(dir, ".git", "spor", "auto-submit.lock"))
 	require.ErrorIs(t, err, os.ErrNotExist)

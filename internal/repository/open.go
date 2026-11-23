@@ -44,11 +44,6 @@ func HeadRef(gitDir string) string {
 	return "refs/spor/" + worktreeKey(gitDir) + "/head"
 }
 
-// IDRef is the ref that keeps one submission's commits.
-func IDRef(gitDir, sporID string) string {
-	return "refs/spor/" + worktreeKey(gitDir) + "/" + sporID
-}
-
 // CommonDir returns the git common dir for a worktree git dir.
 // A repository that is not a linked worktree is its own common dir.
 func CommonDir(gitDir string) (string, error) {

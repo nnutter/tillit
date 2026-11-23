@@ -4,15 +4,7 @@ import (
 	"errors"
 
 	"github.com/go-git/go-git/v6"
-	"github.com/go-git/go-git/v6/plumbing"
 )
-
-func missingHead(err error) error {
-	if errors.Is(err, plumbing.ErrReferenceNotFound) {
-		return errors.New("repository has no commits")
-	}
-	return err
-}
 
 type identity struct {
 	name  string

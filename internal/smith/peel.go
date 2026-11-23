@@ -64,28 +64,6 @@ type madeCommit struct {
 	subject string
 }
 
-func applyPlans(source storer.EncodedObjectStorer, who identity, parent plumbing.Hash, files, index []fileBlob, plans []plannedFile, sporID string, when time.Time) ([]madeCommit, plumbing.Hash, error) {
-	current := files
-	var made []madeCommit
-	for _, plan := range plans {
-		next, commits, err := applyFile(source, who, parent, current, plan, sporID, when)
-		if err != nil {
-			return nil, plumbing.ZeroHash, err
-		}
-		current = next
-		parent = tipHash(commits, parent)
-		made = append(made, commits...)
-	}
-	extra, tip, err := maybeRemainder(source, who, parent, current, index, sporID, when)
-	if err != nil {
-		return nil, plumbing.ZeroHash, err
-	}
-	if extra.hash.IsZero() {
-		return made, tip, nil
-	}
-	return append(made, extra), tip, nil
-}
-
 func tipHash(commits []madeCommit, parent plumbing.Hash) plumbing.Hash {
 	if len(commits) == 0 {
 		return parent
@@ -124,23 +102,4 @@ func applyStep(source storer.EncodedObjectStorer, who identity, parent plumbing.
 		return nil, madeCommit{}, err
 	}
 	return next, madeCommit{hash: hash, subject: subject}, nil
-}
-
-func maybeRemainder(source storer.EncodedObjectStorer, who identity, parent plumbing.Hash, peeled, index []fileBlob, sporID string, when time.Time) (madeCommit, plumbing.Hash, error) {
-	tipTree, err := storeFiles(source, peeled)
-	if err != nil {
-		return madeCommit{}, plumbing.ZeroHash, err
-	}
-	indexTree, err := storeFiles(source, index)
-	if err != nil {
-		return madeCommit{}, plumbing.ZeroHash, err
-	}
-	if tipTree.Equal(indexTree) {
-		return madeCommit{}, parent, nil
-	}
-	hash, err := writeCommit(source, indexTree, parent, who, commitMessage(remainderSubject, sporID, newChangeID(indexTree, parent, sporID, remainderSubject)), when)
-	if err != nil {
-		return madeCommit{}, plumbing.ZeroHash, err
-	}
-	return madeCommit{hash: hash, subject: remainderSubject}, hash, nil
 }

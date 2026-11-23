@@ -8,7 +8,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/smith"
 	"github.com/nnutter/spor/internal/testutil"
 )
 
@@ -110,9 +109,6 @@ func TestPublishesOnlyValidatedRefactorsWithoutWritingFiles(t *testing.T) {
 	require.Equal(t, "untouched", string(untracked))
 	require.Empty(t, mustGit(t, root, "diff", "--cached"))
 	require.Contains(t, mustGit(t, root, "diff"), "feature")
-	manual, err := smith.Status(t.Context(), root)
-	require.NoError(t, err)
-	require.Equal(t, "No submissions.", manual.Message)
 }
 
 func TestFailedValidationDoesNotPublish(t *testing.T) {

@@ -1,13 +1,8 @@
 # Auditor
 
-- The Auditor can maintain an alternate Git Worktree in order to run validation, etc.
-- The Auditor tracks validation status based on Git commit hash, Git patch hash, and Change-Id which will enable the User to chose when to re-validate commits.
-- The Auditor can be configured to re-validate at the Git commit hash level, Git patch hash level, or Change-Id level with the option to manually run.
-- The Auditor will call a coding agent to create fixup commits for commits that fail validation.
-- The Auditor can be configured to halt if the coding agent does not succeed at validation within a specified number of attempts, default to 3 attempts.
+- The Auditor checks exact candidate commits in an isolated checkout using the configured operational check.
+- A passing check is not proof of semantic equivalence.
 
 ## Skills
 
 Load the skills named in ancestor `AGENTS.md` files before working here.
-
-This package adds no further skill.

@@ -1,13 +1,8 @@
 # Smith
 
-- This can probably build on [intent](https://github.com/nnutter/intent) (private repo, checked out in repo root at intent/).
-  However, I don't think its very robust.
-  I'd rather duplicate the code over than call out to `intent`.
-- The Smith receives a patch/diff with an assigned Spor-Id which propagates to commits it extracts from the path/diff.
-- The Smith can maintain an isolated Git Index in order to build commits.
+- The Smith extracts supported refactor commits from an immutable working snapshot.
+- Extraction must not modify the user's index, working files, or manual submission state.
 
 ## Skills
 
 Load the skills named in ancestor `AGENTS.md` files before working here.
-
-This package adds no further skill.

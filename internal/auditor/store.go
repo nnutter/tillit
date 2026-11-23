@@ -129,31 +129,6 @@ func record(ctx context.Context, db statedb, item identity, passed bool) error {
 	return nil
 }
 
-func recordedOutcome(ctx context.Context, db statedb, mode config.Mode, item identity) (Outcome, bool, error) {
-	passed, err := alreadyPassed(ctx, db, mode, item)
-	if err != nil {
-		return Outcome{}, false, err
-	}
-	if passed {
-		return Outcome{Hash: item.hash, Passed: true}, true, nil
-	}
-	row := db.QueryRowContext(ctx, `
-		SELECT passed FROM validation
-		WHERE commit_hash = ?
-		ORDER BY created DESC, rowid DESC
-		LIMIT 1
-	`, item.hash)
-	var flag int
-	err = row.Scan(&flag)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Outcome{}, false, nil
-	}
-	if err != nil {
-		return Outcome{}, false, err
-	}
-	return Outcome{Hash: item.hash, Passed: flag != 0}, true, nil
-}
-
 func passedBit(passed bool) int {
 	if passed {
 		return 1

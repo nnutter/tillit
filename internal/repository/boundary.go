@@ -39,7 +39,7 @@ func EnsureNoPendingIntegration(gitDir string) error {
 		return err
 	}
 	if branch != "" {
-		return fmt.Errorf("pending rebase needs recovery; run spor rebase")
+		return fmt.Errorf("pending integration needs recovery; use a previous Spor version or resolve it safely before continuing")
 	}
 	return nil
 }

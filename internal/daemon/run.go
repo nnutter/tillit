@@ -6,13 +6,10 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/autosubmit"
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/verifier"
 )
 
-// Run owns the spor worktree lock and polls queued requests until cancelled.
+// Run owns the spor worktree lock and processes automatic snapshots until cancelled.
 // Only one daemon may hold the lock for a worktree at a time.
 func Run(ctx context.Context, repoPath string) error {
 	return run(ctx, repoPath, false, nil)
@@ -38,7 +35,7 @@ func run(ctx context.Context, repoPath string, auto bool, ready func()) error {
 	if ready != nil {
 		ready()
 	}
-	return poll(ctx, repoPath)
+	return pollAutomatic(ctx, repoPath)
 }
 
 func pollWithWatcher(ctx context.Context, repoPath string, ready func()) error {
@@ -68,33 +65,6 @@ func pollAutomatic(ctx context.Context, repoPath string) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			lastAutoError = processAuto(ctx, repoPath, lastAutoError)
-		}
-	}
-}
-
-func poll(ctx context.Context, repoPath string) error {
-	var lastAutoError string
-	timer := time.NewTimer(200 * time.Millisecond)
-	defer timer.Stop()
-	for {
-		// Status reports snapshot errors; a missing boundary must not stop polling.
-		if lock, err := repository.AcquireWriter(repoPath); err == nil {
-			_, _ = verifier.VerifyBranch(ctx, repoPath)
-			_, _ = auditor.ValidateBranch(ctx, repoPath)
-			repository.ReleaseWriter(lock)
-		}
-		// Leave an idle interval even when validation took longer than a poll.
-		// Otherwise the daemon can continuously reacquire the writer lock and
-		// starve the auto-submit watcher.
-		timer.Reset(200 * time.Millisecond)
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-timer.C:
-			// A failed request is already marked done; the daemon
-			// keeps polling so the next request still gets served.
-			_, _ = ProcessPending(ctx, repoPath)
 			lastAutoError = processAuto(ctx, repoPath, lastAutoError)
 		}
 	}

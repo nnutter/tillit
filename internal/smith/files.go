@@ -1,15 +1,12 @@
 package smith
 
 import (
-	"fmt"
 	"io"
 	"slices"
 	"strings"
 
-	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/filemode"
-	"github.com/go-git/go-git/v6/plumbing/format/index"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/go-git/go-git/v6/plumbing/storer"
 )
@@ -18,22 +15,6 @@ type fileBlob struct {
 	path string
 	mode filemode.FileMode
 	hash plumbing.Hash
-}
-
-func loadFiles(repo *git.Repository, head plumbing.Hash) ([]fileBlob, []fileBlob, error) {
-	commit, err := repo.CommitObject(head)
-	if err != nil {
-		return nil, nil, err
-	}
-	headFiles, err := treeFiles(repo.Storer, commit.TreeHash)
-	if err != nil {
-		return nil, nil, err
-	}
-	indexFiles, err := readIndex(repo)
-	if err != nil {
-		return nil, nil, err
-	}
-	return headFiles, indexFiles, nil
 }
 
 func treeFiles(source storer.EncodedObjectStorer, hash plumbing.Hash) ([]fileBlob, error) {
@@ -75,45 +56,6 @@ func joinPath(prefix, name string) string {
 		return name
 	}
 	return prefix + "/" + name
-}
-
-func readIndex(repo *git.Repository) ([]fileBlob, error) {
-	idx, err := repo.Storer.Index()
-	if err != nil {
-		return nil, err
-	}
-	return indexFiles(idx)
-}
-
-func indexFiles(idx *index.Index) ([]fileBlob, error) {
-	if idx == nil {
-		return nil, nil
-	}
-	var files []fileBlob
-	for _, entry := range idx.Entries {
-		file, skip, err := indexFile(entry)
-		if err != nil {
-			return nil, err
-		}
-		if skip {
-			continue
-		}
-		files = append(files, file)
-	}
-	return files, nil
-}
-
-func indexFile(entry *index.Entry) (fileBlob, bool, error) {
-	if entry.Stage != 0 {
-		return fileBlob{}, false, fmt.Errorf("index has a conflict at %s", entry.Name)
-	}
-	if entry.IntentToAdd {
-		return fileBlob{}, true, nil
-	}
-	if entry.Hash.IsZero() {
-		return fileBlob{}, true, nil
-	}
-	return fileBlob{path: entry.Name, mode: entry.Mode, hash: entry.Hash}, false, nil
 }
 
 func changedPaths(head, index []fileBlob) []string {

@@ -1,15 +1,9 @@
 # Daemon
 
-- The Spor daemon will run in the background and manage the Spor process for a given Git worktree.
-- The Spor daemon will watch the SQLite database for new changes and process them as they are added (by the user having run `spor add`).
-- The Spor daemon will call the Smith to extract commits from the added changes and maintain an isolated Git Index to build commits.
-- The Spor daemon will call the Auditor to validate commits and make fixup commits for any that fail validation.
-- The Spor daemon will call the Mender to incorporate Spor commits back into the User's branch/worktree when the User runs `spor rebase`.
+- The daemon manages the watcher for one Git worktree.
+- It processes captured snapshots and publishes validated refactorings without writing working files.
+- It must preserve legacy state and refuse publication when an interrupted integration or pending manual commits require recovery.
 
 ## Skills
 
 Load the skills named in ancestor `AGENTS.md` files before working here.
-
-When changing how this package calls the Smith, the Auditor, or the Mender, also load the skills named in that package's `AGENTS.md`.
-
-This package adds no further skill.

@@ -11,12 +11,9 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/go-git/go-git/v6/plumbing/storer"
-	"github.com/go-git/go-git/v6/storage"
 
 	"github.com/nnutter/spor/internal/refactor"
 )
-
-const remainderSubject = "Apply the remaining added changes"
 
 func refactorSubject(item refactor.Refactoring) string {
 	text := item.Describe()
@@ -67,8 +64,4 @@ func writeCommit(source storer.EncodedObjectStorer, tree, parent plumbing.Hash, 
 		return plumbing.ZeroHash, err
 	}
 	return source.SetEncodedObject(obj)
-}
-
-func setRef(source storage.Storer, name string, hash plumbing.Hash) error {
-	return source.SetReference(plumbing.NewHashReference(plumbing.ReferenceName(name), hash))
 }
