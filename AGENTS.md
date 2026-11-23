@@ -1,7 +1,9 @@
 # Spor
 
 - Spor should track application state in a SQLite database in the Git worktree's git-dir, under a spor subfolder.
-- Spor should use `pi` to call a coding agent for specified coding agent tasks using a configured provider/model.
+- Spor extracts supported refactorings from tracked working changes and checks exact candidate commits before publication.
+- Verification and validation of existing feature-branch commits belong to tillit, not Spor.
+- Legacy configuration remains readable but does not enable removed workflows; `auditor.verify` must be moved to `auditor.validate`.
 - Spor configuration should follow a hierarchy:
   - Global configuration in `~/.config/spor/config.json`
   - Repository configuration in `spor/config.json` in the Git worktree's git-common-dir

@@ -1,6 +1,6 @@
 # Spor
 
-Spor is the set of refactor commits taken from staged changes, together with the record of whether they passed Spor's operational checks.
+Spor extracts refactor commits from tracked working changes and records whether they passed an operational check.
 
 ## Language
 
@@ -26,7 +26,5 @@ Passing tests can provide empirical confidence that a refactor preserves behavio
 
 **Verification**:
 Conditional formal confidence that a refactor preserves behavior because checked language-semantic conditions imply behavior preservation under stated assumptions.
-The current verifier only establishes this for a one-parent commit modifying one existing singleton, import-free Go file: an explicit local variable and its references are renamed while other tokens and bindings remain unchanged.
-It assumes local names have no runtime significance and excludes debug metadata and source position observation.
-Unsupported and rejected changes are not verified, and validation remains separate.
+Verification of existing feature-branch commits belongs to tillit, not Spor.
 *Avoid*: Review

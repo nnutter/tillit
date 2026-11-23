@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +24,24 @@ func TestStatusWithNoSnapshot(t *testing.T) {
 
 func TestVersion(t *testing.T) {
 	require.Equal(t, "0.1.0", cli.New("0.1.0").Version)
+}
+
+func TestHelpListsCommands(t *testing.T) {
+	out := execute(t, cleanRepo(t), "--help")
+	_, commands, ok := strings.Cut(out, "Available Commands:")
+	require.True(t, ok)
+	commands, _, _ = strings.Cut(commands, "Flags:")
+	var names []string
+	for line := range strings.SplitSeq(commands, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 0 {
+			continue
+		}
+		if fields[0] != "help" {
+			names = append(names, fields[0])
+		}
+	}
+	require.ElementsMatch(t, []string{"completion", "config", "start", "status", "stop"}, names)
 }
 
 func TestSubmitIsNotFound(t *testing.T) {

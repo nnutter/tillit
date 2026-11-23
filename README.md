@@ -19,7 +19,7 @@ It uses an alternate index and excludes untracked files.
 Spor extracts supported refactorings without committing the remaining feature changes.
 It validates each exact candidate commit in an isolated checkout, and publishes only if every candidate passes the configured check.
 Passing the check is operational validation, not proof of semantic equivalence.
-Spor does not generate fixup commits or validate existing feature-branch commits.
+Spor does not generate fixup commits or verify or validate existing feature-branch commits; use tillit for that workflow.
 
 Publication requires an attached branch, a clean index, and no Git operation in progress.
 Sparse, skip-worktree, and assume-unchanged index entries are unsupported.
@@ -63,12 +63,5 @@ The `spor config` write commands target the worktree Git directory by default, o
 }
 ```
 
-Existing configuration files containing legacy settings remain accepted.
+Existing configuration files containing legacy settings remain accepted, but those settings do not enable the old workflows.
 If a file uses `auditor.verify`, move that object to `auditor.validate` before running Spor.
-
-## GitHub monitoring
-
-`spor gh auth login` stores a read-only GitHub token in the system keyring, and `spor gh auth status` reports its source and scopes.
-`spor gh watch-pr` monitors checks for the current branch's pull request and saves failure logs under the worktree Git directory.
-Use `--once` for a single poll, or `--interval`, `--timeout`, and `--logs-dir` to control the watch.
-GitHub monitoring does not replace the local check.
