@@ -249,6 +249,13 @@ func TestStageIsAnAliasForAdd(t *testing.T) {
 	require.Contains(t, staged, "Apply the remaining added changes")
 }
 
+func TestGitHubCommandIsNotAvailable(t *testing.T) {
+	out, err := runCLI(t, cleanRepo(t), "gh")
+	require.NoError(t, err)
+	require.Contains(t, out, "Available Commands")
+	require.NotContains(t, out, "  gh ")
+}
+
 func TestSubmitIsNotFound(t *testing.T) {
 	out, err := runCLI(t, cleanRepo(t), "submit")
 	require.NoError(t, err)
