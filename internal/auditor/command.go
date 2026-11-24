@@ -1,9 +1,11 @@
 package auditor
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -54,34 +56,67 @@ func addWorktree(ctx context.Context, gitDir, dest, hash string) error {
 	return runGit(ctx, common, "--git-dir", common, "worktree", "add", "--detach", dest, hash)
 }
 
-func runCommand(ctx context.Context, gitDir string, command []string) (bool, error) {
+func runCommand(ctx context.Context, gitDir string, command []string) (bool, commandOutput, error) {
 	if len(command) == 0 {
-		return false, ErrCommandNotConfigured
+		return false, commandOutput{}, ErrCommandNotConfigured
 	}
 	dest, err := repository.CheckoutDir(gitDir)
 	if err != nil {
-		return false, err
+		return false, commandOutput{}, err
 	}
 	cmd := subprocess.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = dest
 	cmd.Env = commandEnv()
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	var capture outputCapture
+	stream := io.MultiWriter(&capture, os.Stderr)
+	cmd.Stdout, cmd.Stderr = stream, stream
 	hash, _ := gitOutput(ctx, dest, "rev-parse", "HEAD")
 	started := time.Now()
 	slog.InfoContext(ctx, "Starting validation", "commit", strings.TrimSpace(hash))
 	err = cmd.Run()
 	slog.InfoContext(ctx, "Validation finished", "commit", strings.TrimSpace(hash), "passed", err == nil, "duration", time.Since(started))
+	return commandResult(ctx, capture.result(), err)
+}
+
+func commandResult(ctx context.Context, output commandOutput, err error) (bool, commandOutput, error) {
 	if err == nil {
-		return true, nil
+		return true, output, nil
 	}
 	if ctx.Err() != nil {
-		return false, ctx.Err()
+		return false, output, ctx.Err()
 	}
 	if _, ok := errors.AsType[*exec.ExitError](err); ok {
-		return false, nil
+		return false, output, nil
 	}
-	return false, err
+	return false, output, err
+}
+
+const outputLimit = 1 << 20
+
+type commandOutput struct {
+	Text      string `json:"output"`
+	Truncated bool   `json:"output_truncated"`
+}
+
+type outputCapture struct {
+	buffer    bytes.Buffer
+	truncated bool
+}
+
+func (c *outputCapture) Write(p []byte) (int, error) {
+	size := min(len(p), outputLimit-c.buffer.Len())
+	_, _ = c.buffer.Write(p[:size])
+	if size < len(p) {
+		c.truncated = true
+	}
+	return len(p), nil
+}
+
+func (c *outputCapture) result() commandOutput {
+	return commandOutput{
+		Text:      strings.ToValidUTF8(c.buffer.String(), "\uFFFD"),
+		Truncated: c.truncated,
+	}
 }
 
 func runGit(ctx context.Context, dir string, args ...string) error {

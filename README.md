@@ -11,6 +11,7 @@ go install ./cmd/tillit
 tillit config set auditor.validate.command '["go","test","./..."]'
 tillit start
 tillit status
+tillit feedback --json
 ```
 
 Use `tillit start --foreground` to stream daemon output to your terminal.
@@ -22,6 +23,9 @@ The daemon selects commits using the branch's upstream or the default branch's f
 Validation runs a configured command in a separate detached Git worktree.
 Passes and failures are cached by exact commit and effective configuration.
 The daemon retries infrastructure errors.
+`feedback` reports cached failures and command output without rerunning checks.
+Direct `go test` commands report individual test, subtest, and build failures using Go's JSON events.
+Other commands report their failures at the command level.
 
 Set shared configuration with `tillit config set --global` or `tillit config set --repository`.
 Without a scope flag, changes go to the current worktree's Git directory.
