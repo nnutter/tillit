@@ -497,9 +497,9 @@ func (m model) renderDetail() string {
 		inner.WriteString(m.detailViewport.View())
 	}
 	inner.WriteString("\n")
-	footer := "↑/↓ scroll  •  esc/enter to close  •  q to close"
+	footer := "↑/↓ scroll  •  esc to close"
 	if !m.theme.ColorEnabled {
-		footer = "up/down scroll  esc/enter to close"
+		footer = "up/down scroll  esc to close"
 	}
 	inner.WriteString(m.theme.DetailFooter.Render(footer))
 
