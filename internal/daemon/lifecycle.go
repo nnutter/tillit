@@ -9,7 +9,6 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"os/signal"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -38,7 +37,7 @@ func lifecyclePaths(repoPath string) (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
-	root, err := filepath.Abs(repoPath)
+	root, err := repository.WorktreeRoot(gitDir)
 	if err != nil {
 		return "", "", "", err
 	}
@@ -260,17 +259,17 @@ func (r stopRequest) respond(message string) {
 }
 
 // Supervise owns the worker process and provides responsive stop control.
-func Supervise(repoPath string, startup *os.File) error {
+func Supervise(ctx context.Context, repoPath string, startup *os.File) error {
 	defer func() { _ = startup.Close() }()
-	return supervise(repoPath, startup, nil)
+	return supervise(ctx, repoPath, startup, nil)
 }
 
 // Foreground runs the same supervised daemon attached to the caller.
-func Foreground(repoPath string, output io.Writer) error {
-	return supervise(repoPath, io.Discard, output)
+func Foreground(ctx context.Context, repoPath string, output io.Writer) error {
+	return supervise(ctx, repoPath, io.Discard, output)
 }
 
-func supervise(repoPath string, startup, output io.Writer) (result error) {
+func supervise(ctx context.Context, repoPath string, startup, output io.Writer) (result error) {
 	sent := false
 	defer func() {
 		if !sent {
@@ -312,7 +311,7 @@ func supervise(repoPath string, startup, output io.Writer) (result error) {
 	if output != nil {
 		logs = io.MultiWriter(log, output)
 	}
-	return superviseWorker(root, startup, listener, logs, &sent, cleanup)
+	return superviseWorker(ctx, root, startup, listener, logs, &sent, cleanup)
 }
 
 func lockSupervisor(gitDir string) (*os.File, error) {
@@ -348,7 +347,7 @@ func listenControl(socket string) (net.Listener, error) {
 	return listener, nil
 }
 
-func superviseWorker(root string, startup io.Writer, listener net.Listener, log io.Writer, sent *bool, cleanup func()) error {
+func superviseWorker(ctx context.Context, root string, startup io.Writer, listener net.Listener, log io.Writer, sent *bool, cleanup func()) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -394,16 +393,13 @@ func superviseWorker(root string, startup io.Writer, listener net.Listener, log 
 	}()
 	workerDead := make(chan struct{})
 	go func() { _, _ = io.Copy(io.Discard, liveRead); close(workerDead) }()
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, syscall.SIGTERM, syscall.SIGINT)
-	defer signal.Stop(signals)
 	requests := make(chan stopRequest)
 	go acceptStops(listener, requests)
 
 	session := &supervisorSession{
 		cmd: cmd, startup: startup, sent: sent, cleanup: cleanup,
 		outputDone: outputDone, workerReady: workerReady, workerDead: workerDead,
-		signals: signals, requests: requests, readyC: workerReady,
+		cancelled: ctx.Done(), requests: requests, readyC: workerReady,
 	}
 	defer session.finish()
 	return session.run()
@@ -417,7 +413,7 @@ type supervisorSession struct {
 	outputDone    <-chan struct{}
 	workerReady   <-chan string
 	workerDead    <-chan struct{}
-	signals       <-chan os.Signal
+	cancelled     <-chan struct{}
 	requests      <-chan stopRequest
 	readyC        <-chan string
 	reaped        bool
@@ -526,10 +522,8 @@ func (s *supervisorSession) step() error {
 		s.handleRequest(request)
 	case <-s.gracefulChannel():
 		s.expireGraceful()
-	case <-s.signals:
-		if !s.readyReported {
-			return errors.New("daemon supervisor stopped before readiness")
-		}
+	case <-s.cancelled:
+		s.cancelled = nil
 		if s.gracefulReq == nil {
 			s.handleRequest(stopRequest{})
 		}
@@ -541,9 +535,9 @@ func (s *supervisorSession) step() error {
 
 func (s *supervisorSession) workerExited() error {
 	if !s.readyReported && readyPending(s.readyC) {
-		message := blankReady(<-s.workerReady)
-		s.failStartup(message)
-		return fmt.Errorf("start daemon: %s", message)
+		if err := s.reportReady(<-s.workerReady); err != nil {
+			return err
+		}
 	}
 	s.finish()
 	return nil

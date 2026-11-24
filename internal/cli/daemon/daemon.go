@@ -22,7 +22,7 @@ func Start() *cobra.Command {
 				return err
 			}
 			if foreground {
-				return daemoncore.Foreground(repo, cmd.ErrOrStderr())
+				return daemoncore.Foreground(cmd.Context(), repo, cmd.ErrOrStderr())
 			}
 			path, err := daemoncore.Start(cmd.Context(), repo)
 			if err != nil {

@@ -46,7 +46,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if len(os.Args) >= 3 && supervisorRequested() {
-		if err := daemon.Supervise(os.Args[2], os.NewFile(3, "startup")); err != nil {
+		if err := daemon.Supervise(ctx, os.Args[2], os.NewFile(3, "startup")); err != nil {
 			_, _ = fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}

@@ -87,7 +87,8 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 	out, err = call(repo, "stop")
 	require.NoError(t, err, "%s", out)
 
-	checkForeground(t, bin, repo, env)
+	t.Run("foreground stop", func(t *testing.T) { checkForeground(t, bin, repo, env, false) })
+	t.Run("foreground interrupt", func(t *testing.T) { checkForeground(t, bin, repo, env, true) })
 	for _, legacy := range []string{"spor", "timber-review"} {
 		data, err := os.ReadFile(filepath.Join(repo, ".git", legacy, "state.db"))
 		require.NoError(t, err)
@@ -95,7 +96,7 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 	}
 }
 
-func checkForeground(t *testing.T, bin, repo string, env []string) {
+func checkForeground(t *testing.T, bin, repo string, env []string, interrupt bool) {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), bin, "--repo", repo, "start", "--foreground")
 	cmd.Env = env
@@ -112,10 +113,14 @@ func checkForeground(t *testing.T, bin, repo string, env []string) {
 	require.Eventually(t, func() bool {
 		return strings.Contains(status(), "daemon: running")
 	}, 10*time.Second, 50*time.Millisecond)
-	stop := exec.CommandContext(t.Context(), bin, "--repo", repo, "stop")
-	stop.Env = env
-	out, err := stop.CombinedOutput()
-	require.NoError(t, err, "%s", out)
+	if interrupt {
+		require.NoError(t, cmd.Process.Signal(os.Interrupt))
+	} else {
+		stop := exec.CommandContext(t.Context(), bin, "--repo", repo, "stop")
+		stop.Env = env
+		out, err := stop.CombinedOutput()
+		require.NoError(t, err, "%s", out)
+	}
 	select {
 	case err := <-result:
 		require.NoError(t, err)
