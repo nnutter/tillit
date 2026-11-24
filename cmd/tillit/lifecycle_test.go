@@ -41,6 +41,11 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 			_ = cmd.Run()
 		}
 	})
+	for _, legacy := range []string{"spor", "timber-review"} {
+		dir := filepath.Join(repo, ".git", legacy)
+		require.NoError(t, os.MkdirAll(dir, 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "state.db"), []byte(legacy), 0o644))
+	}
 	out, err := call(repo, "start")
 	require.NoError(t, err, "%s", out)
 	logPath := filepath.Join(repo, ".git", "tillit", "daemon.log")
@@ -81,6 +86,43 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 	require.NoError(t, err, "%s", out)
 	out, err = call(repo, "stop")
 	require.NoError(t, err, "%s", out)
+
+	checkForeground(t, bin, repo, env)
+	for _, legacy := range []string{"spor", "timber-review"} {
+		data, err := os.ReadFile(filepath.Join(repo, ".git", legacy, "state.db"))
+		require.NoError(t, err)
+		require.Equal(t, legacy, string(data))
+	}
+}
+
+func checkForeground(t *testing.T, bin, repo string, env []string) {
+	t.Helper()
+	cmd := exec.CommandContext(t.Context(), bin, "--repo", repo, "start", "--foreground")
+	cmd.Env = env
+	require.NoError(t, cmd.Start())
+	t.Cleanup(func() { _ = cmd.Process.Kill() })
+	result := make(chan error, 1)
+	go func() { result <- cmd.Wait() }()
+	status := func() string {
+		check := exec.CommandContext(t.Context(), bin, "--repo", repo, "status")
+		check.Env = env
+		out, _ := check.CombinedOutput()
+		return string(out)
+	}
+	require.Eventually(t, func() bool {
+		return strings.Contains(status(), "daemon: running")
+	}, 10*time.Second, 50*time.Millisecond)
+	stop := exec.CommandContext(t.Context(), bin, "--repo", repo, "stop")
+	stop.Env = env
+	out, err := stop.CombinedOutput()
+	require.NoError(t, err, "%s", out)
+	select {
+	case err := <-result:
+		require.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		require.FailNow(t, "foreground daemon did not exit")
+	}
+	require.Contains(t, status(), "daemon: stopped")
 }
 
 func TestStopKillStopsValidationDescendants(t *testing.T) {

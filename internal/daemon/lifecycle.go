@@ -260,7 +260,17 @@ func (r stopRequest) respond(message string) {
 }
 
 // Supervise owns the worker process and provides responsive stop control.
-func Supervise(repoPath string, startup *os.File) (result error) {
+func Supervise(repoPath string, startup *os.File) error {
+	defer func() { _ = startup.Close() }()
+	return supervise(repoPath, startup, nil)
+}
+
+// Foreground runs the same supervised daemon attached to the caller.
+func Foreground(repoPath string, output io.Writer) error {
+	return supervise(repoPath, io.Discard, output)
+}
+
+func supervise(repoPath string, startup, output io.Writer) (result error) {
 	sent := false
 	defer func() {
 		if !sent {
@@ -270,7 +280,6 @@ func Supervise(repoPath string, startup *os.File) (result error) {
 			}
 			_, _ = fmt.Fprintln(startup, message)
 		}
-		_ = startup.Close()
 	}()
 	root, gitDir, socket, err := lifecyclePaths(repoPath)
 	if err != nil {
@@ -299,7 +308,11 @@ func Supervise(repoPath string, startup *os.File) (result error) {
 		return err
 	}
 	defer func() { _ = log.Close() }()
-	return superviseWorker(root, startup, listener, log, &sent, cleanup)
+	var logs io.Writer = log
+	if output != nil {
+		logs = io.MultiWriter(log, output)
+	}
+	return superviseWorker(root, startup, listener, logs, &sent, cleanup)
 }
 
 func lockSupervisor(gitDir string) (*os.File, error) {
@@ -335,7 +348,7 @@ func listenControl(socket string) (net.Listener, error) {
 	return listener, nil
 }
 
-func superviseWorker(root string, startup *os.File, listener net.Listener, log io.Writer, sent *bool, cleanup func()) error {
+func superviseWorker(root string, startup io.Writer, listener net.Listener, log io.Writer, sent *bool, cleanup func()) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -398,7 +411,7 @@ func superviseWorker(root string, startup *os.File, listener net.Listener, log i
 
 type supervisorSession struct {
 	cmd           *exec.Cmd
-	startup       *os.File
+	startup       io.Writer
 	sent          *bool
 	cleanup       func()
 	outputDone    <-chan struct{}
@@ -416,7 +429,11 @@ type supervisorSession struct {
 
 func (s *supervisorSession) expireGraceful() {
 	if s.gracefulReq != nil {
-		s.gracefulReq.respond("daemon did not stop; retry with tillit stop --kill")
+		if s.gracefulReq.result == nil {
+			s.killGroup(syscall.SIGKILL)
+		} else {
+			s.gracefulReq.respond("daemon did not stop; retry with tillit stop --kill")
+		}
 	}
 	s.gracefulReq = nil
 	s.graceful = nil
@@ -510,8 +527,12 @@ func (s *supervisorSession) step() error {
 	case <-s.gracefulChannel():
 		s.expireGraceful()
 	case <-s.signals:
-		s.killGroup(syscall.SIGKILL)
-		return errors.New("daemon supervisor stopped")
+		if !s.readyReported {
+			return errors.New("daemon supervisor stopped before readiness")
+		}
+		if s.gracefulReq == nil {
+			s.handleRequest(stopRequest{})
+		}
 	case <-s.workerDead:
 		return s.workerExited()
 	}

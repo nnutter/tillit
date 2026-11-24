@@ -13,7 +13,8 @@ tillit start
 tillit status
 ```
 
-Run `tillit stop` to stop the background daemon, or use `tillit daemon` to run in the foreground.
+Use `tillit start --foreground` to stream daemon output to your terminal.
+Run `tillit stop` to stop the daemon in either mode.
 
 ## How checks run
 

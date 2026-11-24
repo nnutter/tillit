@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
 	"github.com/nnutter/tillit/internal/repository"
 	"github.com/nnutter/tillit/internal/verifier"
 )
@@ -26,6 +27,9 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if err := printDaemon(cmd, repo); err != nil {
+		return err
+	}
 	branch, err := auditor.ReportBranch(cmd.Context(), repo)
 	if err != nil {
 		return err
@@ -35,6 +39,19 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	return printBranch(cmd, branch, verification)
+}
+
+func printDaemon(cmd *cobra.Command, repo string) error {
+	running, err := daemon.Running(repo)
+	if err != nil {
+		return fmt.Errorf("report daemon: %w", err)
+	}
+	state := "stopped"
+	if running {
+		state = "running"
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon:", state)
+	return err
 }
 
 func branchVerification(cmd *cobra.Command, repo string, snapshot repository.BranchSnapshot) (verifier.BranchResult, error) {

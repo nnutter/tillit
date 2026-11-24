@@ -23,6 +23,32 @@ func worktreeLockPath(gitDir string) (string, error) {
 	return checkout + ".lock", nil
 }
 
+// Running reports whether a daemon holds the worktree lock.
+func Running(repoPath string) (bool, error) {
+	repo, gitDir, err := repository.Open(repoPath)
+	if err != nil {
+		return false, err
+	}
+	_ = repo.Close()
+	path, err := worktreeLockPath(gitDir)
+	if err != nil {
+		return false, err
+	}
+	file, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = file.Close() }()
+	err = syscall.Flock(int(file.Fd()), syscall.LOCK_SH|syscall.LOCK_NB)
+	if supervisorBusy(err) {
+		return true, nil
+	}
+	return false, err
+}
+
 func acquireWorktreeLock(repoPath string) (*os.File, error) {
 	_, gitDir, err := repository.Open(repoPath)
 	if err != nil {
