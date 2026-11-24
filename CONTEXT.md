@@ -1,27 +1,15 @@
-# Spor
+# Tillit
 
-Spor is the set of refactor commits taken from staged changes, together with the record of whether they passed Spor's operational checks.
+Tillit checks the existing Git commits on a feature branch.
 
 ## Language
 
 **Commit**:
-A spor commit, identified on its own.
+A Git commit on the feature branch, identified by its commit hash.
 *Avoid*: Revision
 
-**Patch**:
-The stable identity of a commit's diff.
-*Avoid*: Diff
-
-**Change**:
-The Change-Id identity of a commit.
-*Avoid*: Patch, commit
-
-**Mode**:
-The identity that decides whether a commit, patch, or change has already passed Spor's operational check.
-*Avoid*: Level
-
 **Validation**:
-Spor's recorded result of running a configured operational check on a commit under a mode.
+Tillit's recorded result of running a configured operational check on a commit.
 Passing tests can provide empirical confidence that a refactor preserves behavior, but a passing check is not semantic verification.
 
 **Verification**:

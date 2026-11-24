@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/daemonlog"
+	"github.com/nnutter/tillit/internal/daemonlog"
 )
 
 func TestLogRotatesOversizedWritesAndKeepsNewestBytes(t *testing.T) {
@@ -26,7 +26,7 @@ func TestLogRotatesOversizedWritesAndKeepsNewestBytes(t *testing.T) {
 	require.Equal(t, len(data), n)
 	require.NoError(t, log.Close())
 
-	path := filepath.Join(gitDir, "spor", "daemon.log")
+	path := filepath.Join(gitDir, "tillit", "daemon.log")
 	for _, tc := range []struct {
 		suffix string
 		byte   byte

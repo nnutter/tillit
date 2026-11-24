@@ -12,16 +12,17 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"github.com/nnutter/spor/internal/config"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/config"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // BranchOutcome describes the validation of an original branch commit.
 type BranchOutcome struct {
-	Hash    string
-	Subject string
-	State   string
-	Error   string
+	Hash     string    `json:"commit"`
+	Subject  string    `json:"subject"`
+	State    string    `json:"validation"`
+	Error    string    `json:"error,omitempty"`
+	Evidence *Evidence `json:"evidence,omitzero"`
 }
 
 // BranchResult ties outcomes to the branch snapshot that selected them.
@@ -31,7 +32,7 @@ type BranchResult struct {
 }
 
 // ValidateBranch validates a fixed branch snapshot without modifying its commits.
-// Callers must serialize it with other operations using the Spor checkout.
+// Callers must serialize it with other operations using the Tillit checkout.
 func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
 	if err != nil {
@@ -51,7 +52,7 @@ func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) 
 		return BranchResult{}, err
 	}
 	defer func() { _ = db.Close() }()
-	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS branch_validation (commit_hash TEXT NOT NULL, input TEXT NOT NULL, state TEXT NOT NULL, error TEXT NOT NULL, PRIMARY KEY (commit_hash, input))`); err != nil {
+	if err := ensureBranchValidation(ctx, db.DB); err != nil {
 		return BranchResult{}, err
 	}
 	result := BranchResult{Snapshot: snapshot}
@@ -91,31 +92,55 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 	if err != nil {
 		return outcome, err
 	}
+	outcome, cached, err := cachedBranchOutcome(ctx, db, key, outcome)
+	if err != nil {
+		return outcome, err
+	}
+	if cached {
+		return outcome, nil
+	}
 	if err := prepareBranchCheckout(ctx, gitDir, dest, outcome.Hash); err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
 	} else {
-		var cached bool
-		outcome, cached, err = cachedBranchOutcome(ctx, db, key, outcome)
-		if err != nil {
-			return outcome, err
-		}
-		if cached {
-			return outcome, nil
-		}
 		outcome = runBranchCommand(ctx, gitDir, cfg.Command, outcome)
 	}
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
 	}
-	_, err = db.ExecContext(ctx, `INSERT INTO branch_validation (commit_hash, input, state, error) VALUES (?, ?, ?, ?) ON CONFLICT (commit_hash, input) DO UPDATE SET state = excluded.state, error = excluded.error`, outcome.Hash, key, outcome.State, outcome.Error)
-	if err != nil {
+	return finishBranchValidation(ctx, db, gitDir, dest, key, outcome)
+}
+
+func finishBranchValidation(ctx context.Context, db statedb, gitDir, dest, key string, outcome BranchOutcome) (BranchOutcome, error) {
+	if err := recordBranchOutcome(ctx, db.DB, key, outcome); err != nil {
 		return outcome, fmt.Errorf("record branch validation: %w", err)
 	}
+	if outcome.State == "failed" {
+		if err := recordReproductions(ctx, db, gitDir, dest, key, outcome); err != nil {
+			return outcome, err
+		}
+	}
+	outcome.Evidence = nil
 	return outcome, nil
 }
 
+func recordReproductions(ctx context.Context, db statedb, gitDir, dest, key string, outcome BranchOutcome) error {
+	if outcome.Evidence == nil {
+		return nil
+	}
+	if !collectReproductions(ctx, gitDir, dest, outcome.Hash, outcome.Evidence) {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := recordBranchOutcome(ctx, db.DB, key, outcome); err != nil {
+		return fmt.Errorf("record isolated reproductions: %w", err)
+	}
+	return nil
+}
+
 func cachedBranchOutcome(ctx context.Context, db statedb, key string, outcome BranchOutcome) (BranchOutcome, bool, error) {
-	err := db.QueryRowContext(ctx, `SELECT state, error FROM branch_validation WHERE commit_hash = ? AND input = ?`, outcome.Hash, key).Scan(&outcome.State, &outcome.Error)
+	err := readBranchOutcome(ctx, db.DB, false, key, &outcome)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return outcome, false, err
 	}
@@ -138,12 +163,18 @@ func branchConfigKey(cfg config.Config) (string, error) {
 }
 
 func runBranchCommand(ctx context.Context, gitDir string, command []string, outcome BranchOutcome) BranchOutcome {
-	passed, err := runCommand(ctx, gitDir, command)
+	args, goJSON := evidenceCommand(command)
+	passed, output, err := runCommand(ctx, gitDir, args, goJSON)
+	outcome.Evidence = new(Evidence{
+		Command: args, Output: output.Text, OutputTruncated: output.Truncated,
+		Failures: []Failure{},
+	})
 	outcome.State = "passed"
 	if err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
 	} else if !passed {
 		outcome.State, outcome.Error = "failed", "validation command failed"
+		outcome.Evidence.Failures = evidenceFailures(output)
 	}
 	return outcome
 }

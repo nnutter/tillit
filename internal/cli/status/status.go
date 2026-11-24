@@ -6,18 +6,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/daemon"
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/smith"
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
 // New builds the status command.
 func New() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
-		Short: "Show the latest add",
+		Short: "Show validation and verification of branch commits",
 		Args:  cobra.NoArgs,
 		RunE:  run,
 	}
@@ -28,6 +27,9 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	if err := printDaemon(cmd, repo); err != nil {
+		return err
+	}
 	branch, err := auditor.ReportBranch(cmd.Context(), repo)
 	if err != nil {
 		return err
@@ -36,38 +38,20 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	result, err := smith.Status(cmd.Context(), repo)
-	if err != nil {
-		return err
-	}
-	report, err := auditor.Report(cmd.Context(), repo)
-	if err != nil {
-		return err
-	}
-	outcome, err := daemon.RebaseOutcome(cmd.Context(), repo)
-	if err != nil {
-		return err
-	}
-	outcome = formatRebase(outcome)
-	workError, err := daemon.WorkError(cmd.Context(), repo)
-	if err != nil {
-		return err
-	}
-	if workError != "" {
-		workError += "\n"
-	}
-	_, err = fmt.Fprint(cmd.OutOrStdout(), smith.Format(result)+report+outcome+workError)
-	if err != nil {
-		return err
-	}
 	return printBranch(cmd, branch, verification)
 }
 
-func formatRebase(outcome string) string {
-	if outcome == "" {
-		return ""
+func printDaemon(cmd *cobra.Command, repo string) error {
+	running, err := daemon.Running(repo)
+	if err != nil {
+		return fmt.Errorf("report daemon: %w", err)
 	}
-	return "rebase: " + outcome + "\n"
+	state := "stopped"
+	if running {
+		state = "running"
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), "daemon:", state)
+	return err
 }
 
 func branchVerification(cmd *cobra.Command, repo string, snapshot repository.BranchSnapshot) (verifier.BranchResult, error) {

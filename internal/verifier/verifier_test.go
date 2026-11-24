@@ -6,7 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
 func TestVerify(t *testing.T) {

@@ -1,9 +1,11 @@
 package auditor
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -11,9 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/subprocess"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/subprocess"
 )
+
+var ErrCommandNotConfigured = errors.New("validate command is not configured")
 
 func checkout(ctx context.Context, gitDir, hash string) error {
 	dest, err := repository.CheckoutDir(gitDir)
@@ -52,34 +56,76 @@ func addWorktree(ctx context.Context, gitDir, dest, hash string) error {
 	return runGit(ctx, common, "--git-dir", common, "worktree", "add", "--detach", dest, hash)
 }
 
-func runCommand(ctx context.Context, gitDir string, command []string) (bool, error) {
+func runCommand(ctx context.Context, gitDir string, command []string, collectGoEvents bool) (bool, commandOutput, error) {
 	if len(command) == 0 {
-		return false, ErrCommandNotConfigured
+		return false, commandOutput{}, ErrCommandNotConfigured
 	}
 	dest, err := repository.CheckoutDir(gitDir)
 	if err != nil {
-		return false, err
+		return false, commandOutput{}, err
 	}
 	cmd := subprocess.CommandContext(ctx, command[0], command[1:]...)
 	cmd.Dir = dest
 	cmd.Env = commandEnv()
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	var capture outputCapture
+	var events goEvents
+	var stream io.Writer = io.MultiWriter(&capture, os.Stderr)
+	if collectGoEvents {
+		stream = io.MultiWriter(stream, &events)
+	}
+	cmd.Stdout, cmd.Stderr = stream, stream
 	hash, _ := gitOutput(ctx, dest, "rev-parse", "HEAD")
 	started := time.Now()
 	slog.InfoContext(ctx, "Starting validation", "commit", strings.TrimSpace(hash))
 	err = cmd.Run()
 	slog.InfoContext(ctx, "Validation finished", "commit", strings.TrimSpace(hash), "passed", err == nil, "duration", time.Since(started))
+	output := capture.result()
+	if collectGoEvents {
+		output.Failures = events.result()
+	}
+	return commandResult(ctx, output, err)
+}
+
+func commandResult(ctx context.Context, output commandOutput, err error) (bool, commandOutput, error) {
 	if err == nil {
-		return true, nil
+		return true, output, nil
 	}
 	if ctx.Err() != nil {
-		return false, ctx.Err()
+		return false, output, ctx.Err()
 	}
 	if _, ok := errors.AsType[*exec.ExitError](err); ok {
-		return false, nil
+		return false, output, nil
 	}
-	return false, err
+	return false, output, err
+}
+
+const outputLimit = 1 << 20
+
+type commandOutput struct {
+	Text      string
+	Truncated bool
+	Failures  []Failure
+}
+
+type outputCapture struct {
+	buffer    bytes.Buffer
+	truncated bool
+}
+
+func (c *outputCapture) Write(p []byte) (int, error) {
+	size := min(len(p), outputLimit-c.buffer.Len())
+	_, _ = c.buffer.Write(p[:size])
+	if size < len(p) {
+		c.truncated = true
+	}
+	return len(p), nil
+}
+
+func (c *outputCapture) result() commandOutput {
+	return commandOutput{
+		Text:      strings.ToValidUTF8(c.buffer.String(), "\uFFFD"),
+		Truncated: c.truncated,
+	}
 }
 
 func runGit(ctx context.Context, dir string, args ...string) error {
@@ -89,16 +135,6 @@ func runGit(ctx context.Context, dir string, args ...string) error {
 
 func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := gitCommand(ctx, dir, args...)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", gitError(args, err)
-	}
-	return string(out), nil
-}
-
-func gitInput(ctx context.Context, dir, input string, args ...string) (string, error) {
-	cmd := gitCommand(ctx, dir, args...)
-	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", gitError(args, err)

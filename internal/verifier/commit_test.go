@@ -9,7 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/testutil"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
 func TestVerifyCommit(t *testing.T) {
@@ -78,6 +79,7 @@ func TestVerifyCommit(t *testing.T) {
 
 func gitTest(t *testing.T, repo string, args ...string) string {
 	t.Helper()
+	testutil.IsolateGit(t)
 	args = append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null"}, args...)
 	cmd := exec.CommandContext(t.Context(), "git", args...)
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.com")

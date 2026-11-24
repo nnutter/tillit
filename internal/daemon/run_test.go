@@ -11,23 +11,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/daemon"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 func branchGit(t *testing.T, dir string, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "git", args...)
 	cmd.Dir = dir
-	for _, entry := range os.Environ() {
-		key, _, _ := strings.Cut(entry, "=")
-		switch key {
-		case "GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX", "GIT_EXEC_PATH":
-			continue
-		}
-		cmd.Env = append(cmd.Env, entry)
-	}
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "%s", out)
 	return strings.TrimSpace(string(out))
@@ -41,9 +33,9 @@ func branchRepo(t *testing.T) (string, string) {
 	branchGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	branchGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	log := filepath.Join(t.TempDir(), "calls")
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spor"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".spor", "config.json"), []byte(`{"auditor":{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}}`), 0o644))
-	branchGit(t, dir, "add", ".spor/config.json")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(`{"auditor":{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}}`), 0o644))
+	branchGit(t, dir, "add", ".tillit/config.json")
 	branchGit(t, dir, "commit", "-m", "configure validation")
 	return dir, log
 }
@@ -84,36 +76,11 @@ func TestRunContinuesAfterMissingBoundary(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- daemon.Run(ctx, dir) }()
 	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
-	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
-	require.Eventually(t, func() bool {
-		failure, _ := daemon.WorkError(t.Context(), dir)
-		return strings.Contains(failure, "fork-point")
-	}, 10*time.Second, 50*time.Millisecond)
+	_, err := auditor.ReportBranch(t.Context(), dir)
+	require.ErrorContains(t, err, "fork-point")
 	branchGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	require.Eventually(t, func() bool {
 		data, _ := os.ReadFile(log)
 		return strings.Contains(string(data), "run\n")
 	}, 10*time.Second, 50*time.Millisecond)
-}
-
-func TestValidateRequestChecksBranchAndReportsMissingBoundary(t *testing.T) {
-	dir, log := branchRepo(t)
-	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
-	processed, err := daemon.ProcessPending(t.Context(), dir)
-	require.True(t, processed)
-	require.NoError(t, err)
-	data, err := os.ReadFile(log)
-	require.NoError(t, err)
-	require.Equal(t, 1, strings.Count(string(data), "run\n"))
-	report, err := auditor.ReportBranch(t.Context(), dir)
-	require.NoError(t, err)
-	require.Equal(t, "passed", report.Outcomes[0].State)
-	branchGit(t, dir, "update-ref", "-d", "refs/remotes/origin/main")
-	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
-	processed, err = daemon.ProcessPending(t.Context(), dir)
-	require.True(t, processed)
-	require.ErrorContains(t, err, "fork-point")
-	workErr, err := daemon.WorkError(t.Context(), dir)
-	require.NoError(t, err)
-	require.Contains(t, workErr, "fork-point")
 }

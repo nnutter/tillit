@@ -3,15 +3,13 @@ package auditor
 import (
 	"context"
 	"database/sql"
-	"errors"
+	json "encoding/json/v2"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"time"
 
 	_ "modernc.org/sqlite"
-
-	"github.com/nnutter/spor/internal/config"
 )
 
 type statedb struct {
@@ -19,11 +17,16 @@ type statedb struct {
 }
 
 func openState(ctx context.Context, gitDir string) (statedb, error) {
-	dir := filepath.Join(gitDir, "spor")
+	dir := filepath.Join(gitDir, "tillit")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return statedb{}, err
 	}
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, "state.db")+"?_pragma=busy_timeout(5000)")
+	path := filepath.Join(dir, "state.db")
+	if err := privateStateFile(path); err != nil {
+		return statedb{}, err
+	}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "_pragma=busy_timeout(5000)"}
+	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return statedb{}, err
 	}
@@ -31,132 +34,85 @@ func openState(ctx context.Context, gitDir string) (statedb, error) {
 		_ = db.Close()
 		return statedb{}, err
 	}
-	if err := createValidationTable(ctx, db); err != nil {
-		_ = db.Close()
-		return statedb{}, err
-	}
 	return statedb{DB: db}, nil
 }
 
-func createValidationTable(ctx context.Context, db *sql.DB) error {
-	tx, err := db.BeginTx(ctx, nil)
+// Validation output can contain secrets. Restrict existing Tillit databases
+// as well as newly created ones before writing evidence.
+func privateStateFile(path string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = tx.Rollback() }()
-	var legacy, current int
-	if err := tx.QueryRowContext(ctx, `SELECT
-		EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'verification'),
-		EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'validation')`).Scan(&legacy, &current); err != nil {
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
 		return err
 	}
-	if legacy != 0 {
-		if current != 0 {
-			return errors.New("both legacy verification and validation tables exist; resolve the conflicting validation records")
+	if info.Mode().Perm() == 0o600 {
+		return nil
+	}
+	return file.Chmod(0o600)
+}
+
+func ensureBranchValidation(ctx context.Context, db *sql.DB) error {
+	_, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS branch_validation (
+		commit_hash TEXT NOT NULL, input TEXT NOT NULL, state TEXT NOT NULL, error TEXT NOT NULL,
+		evidence TEXT NOT NULL DEFAULT '', PRIMARY KEY (commit_hash, input)
+	)`)
+	if err != nil {
+		return err
+	}
+	exists, err := branchEvidenceColumn(ctx, db)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	_, err = db.ExecContext(ctx, `ALTER TABLE branch_validation ADD COLUMN evidence TEXT NOT NULL DEFAULT ''`)
+	return err
+}
+
+func branchEvidenceColumn(ctx context.Context, db *sql.DB) (bool, error) {
+	var exists bool
+	err := db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pragma_table_info('branch_validation') WHERE name = 'evidence')`).Scan(&exists)
+	return exists, err
+}
+
+func recordBranchOutcome(ctx context.Context, db *sql.DB, key string, outcome BranchOutcome) error {
+	var raw string
+	if outcome.Evidence != nil {
+		data, err := json.Marshal(outcome.Evidence)
+		if err != nil {
+			return err
 		}
-		if _, err := tx.ExecContext(ctx, `ALTER TABLE verification RENAME TO validation`); err != nil {
-			return fmt.Errorf("migrate validation records: %w", err)
-		}
+		raw = string(data)
 	}
-	_, err = tx.ExecContext(ctx, `
-		CREATE TABLE IF NOT EXISTS validation (
-			commit_hash TEXT NOT NULL,
-			patch_id TEXT NOT NULL,
-			change_id TEXT NOT NULL,
-			passed INTEGER NOT NULL,
-			created TEXT NOT NULL
-		)
-	`)
-	if err != nil {
-		return err
-	}
-	return tx.Commit()
-}
-
-// An empty patch id or change id is not shared, so it never matches another row.
-func alreadyPassed(ctx context.Context, db statedb, mode config.Mode, item identity) (bool, error) {
-	switch mode {
-	case config.ModeCommit:
-		return hasPass(ctx, db, `
-			SELECT 1 FROM validation
-			WHERE commit_hash = ? AND passed = 1
-			LIMIT 1
-		`, item.hash)
-	case config.ModePatch:
-		return hasKeyedPass(ctx, db, item.patchID, `
-			SELECT 1 FROM validation
-			WHERE patch_id = ? AND passed = 1
-			LIMIT 1
-		`)
-	case config.ModeChange:
-		return hasKeyedPass(ctx, db, item.changeID, `
-			SELECT 1 FROM validation
-			WHERE change_id = ? AND passed = 1
-			LIMIT 1
-		`)
-	default:
-		return false, fmt.Errorf("validate mode %q is not commit, patch, or change", mode)
-	}
-}
-
-func hasKeyedPass(ctx context.Context, db statedb, key, query string) (bool, error) {
-	if key == "" {
-		return false, nil
-	}
-	return hasPass(ctx, db, query, key)
-}
-
-func hasPass(ctx context.Context, db statedb, query, key string) (bool, error) {
-	var one int
-	err := db.QueryRowContext(ctx, query, key).Scan(&one)
-	if errors.Is(err, sql.ErrNoRows) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func record(ctx context.Context, db statedb, item identity, passed bool) error {
 	_, err := db.ExecContext(ctx, `
-		INSERT INTO validation (commit_hash, patch_id, change_id, passed, created)
-		VALUES (?, ?, ?, ?, ?)
-	`, item.hash, item.patchID, item.changeID, passedBit(passed), time.Now().UTC().Format(time.RFC3339Nano))
+		INSERT INTO branch_validation (commit_hash, input, state, error, evidence) VALUES (?, ?, ?, ?, ?)
+		ON CONFLICT (commit_hash, input) DO UPDATE SET
+			state = excluded.state, error = excluded.error, evidence = excluded.evidence
+	`, outcome.Hash, key, outcome.State, outcome.Error, raw)
+	return err
+}
+
+func readBranchOutcome(ctx context.Context, db *sql.DB, hasEvidence bool, key string, outcome *BranchOutcome) error {
+	if !hasEvidence {
+		return db.QueryRowContext(ctx, `SELECT state, error FROM branch_validation WHERE commit_hash = ? AND input = ?`, outcome.Hash, key).
+			Scan(&outcome.State, &outcome.Error)
+	}
+	var raw string
+	err := db.QueryRowContext(ctx, `SELECT state, error, evidence FROM branch_validation WHERE commit_hash = ? AND input = ?`, outcome.Hash, key).
+		Scan(&outcome.State, &outcome.Error, &raw)
 	if err != nil {
-		return fmt.Errorf("record validation: %w", err)
+		return err
+	}
+	if raw == "" {
+		return nil
+	}
+	if err := json.Unmarshal([]byte(raw), &outcome.Evidence); err != nil {
+		return fmt.Errorf("decode validation evidence: %w", err)
 	}
 	return nil
-}
-
-func recordedOutcome(ctx context.Context, db statedb, mode config.Mode, item identity) (Outcome, bool, error) {
-	passed, err := alreadyPassed(ctx, db, mode, item)
-	if err != nil {
-		return Outcome{}, false, err
-	}
-	if passed {
-		return Outcome{Hash: item.hash, Passed: true}, true, nil
-	}
-	row := db.QueryRowContext(ctx, `
-		SELECT passed FROM validation
-		WHERE commit_hash = ?
-		ORDER BY created DESC, rowid DESC
-		LIMIT 1
-	`, item.hash)
-	var flag int
-	err = row.Scan(&flag)
-	if errors.Is(err, sql.ErrNoRows) {
-		return Outcome{}, false, nil
-	}
-	if err != nil {
-		return Outcome{}, false, err
-	}
-	return Outcome{Hash: item.hash, Passed: flag != 0}, true, nil
-}
-
-func passedBit(passed bool) int {
-	if passed {
-		return 1
-	}
-	return 0
 }

@@ -1,4 +1,4 @@
-// Package repository opens the git worktree spor is acting on.
+// Package repository opens the git worktree tillit is acting on.
 package repository
 
 import (
@@ -37,16 +37,6 @@ func Open(start string) (*git.Repository, string, error) {
 		return nil, "", err
 	}
 	return repo, gitDir, nil
-}
-
-// HeadRef is the ref that points at the worktree's latest spor commits.
-func HeadRef(gitDir string) string {
-	return "refs/spor/" + worktreeKey(gitDir) + "/head"
-}
-
-// IDRef is the ref that keeps one submission's commits.
-func IDRef(gitDir, sporID string) string {
-	return "refs/spor/" + worktreeKey(gitDir) + "/" + sporID
 }
 
 // CommonDir returns the git common dir for a worktree git dir.

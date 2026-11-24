@@ -9,11 +9,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
+	testutil.IsolateGit(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
@@ -28,8 +30,8 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 	script := filepath.Join(t.TempDir(), "check")
 	data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{script}}}})
 	require.NoError(t, err)
-	writeFile(t, filepath.Join(dir, ".spor", "config.json"), string(data))
-	runGit(t, dir, "add", ".spor/config.json")
+	writeFile(t, filepath.Join(dir, ".tillit", "config.json"), string(data))
+	runGit(t, dir, "add", ".tillit/config.json")
 	runGit(t, dir, "commit", "-m", "check")
 	gitDir := strings.TrimSpace(runGit(t, dir, "rev-parse", "--absolute-git-dir"))
 	dest, err := repository.CheckoutDir(gitDir)
@@ -64,6 +66,7 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 }
 
 func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
+	testutil.IsolateGit(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
@@ -78,14 +81,14 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "log")
 	script := filepath.Join(t.TempDir(), "check")
 	writeFile(t, script, "#!/bin/sh\nprintf '%s %s %s\\n' \"$(git rev-parse HEAD)\" \"$PWD\" \"$1\" >> \""+log+"\"\n[ \"$1\" != fail ]\n")
-	configPath := filepath.Join(dir, ".spor", "config.json")
+	configPath := filepath.Join(dir, ".tillit", "config.json")
 	writeBranchConfig := func(value string) {
 		t.Helper()
 		data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 		require.NoError(t, os.WriteFile(configPath, data, 0o644))
-		runGit(t, dir, "add", ".spor/config.json")
+		runGit(t, dir, "add", ".tillit/config.json")
 	}
 	writeBranchConfig("fail")
 	runGit(t, dir, "commit", "-m", "fails")
@@ -113,8 +116,15 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	require.Contains(t, lines[0], " fail")
 	require.Contains(t, lines[1], second+" ")
 	require.NotContains(t, lines[0], linked)
-	_, err = auditor.ValidateBranch(t.Context(), linked)
+	gitDir := strings.TrimSpace(runGit(t, linked, "rev-parse", "--absolute-git-dir"))
+	dest, err := repository.CheckoutDir(gitDir)
 	require.NoError(t, err)
+	marker := filepath.Join(dest, "cached-validation-marker")
+	writeFile(t, marker, "preserve")
+	cached, err := auditor.ValidateBranch(t.Context(), linked)
+	require.NoError(t, err)
+	require.Equal(t, result.Outcomes, cached.Outcomes)
+	require.Equal(t, "preserve", readFile(t, marker))
 	require.Equal(t, lines, logLines(t, log))
 	require.Equal(t, before, runGit(t, linked, "status", "--porcelain"))
 	require.Equal(t, "preserve", readFile(t, filepath.Join(linked, "dirty")))
@@ -126,15 +136,14 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	require.Equal(t, before, runGit(t, linked, "status", "--porcelain"))
 
 	// A malformed historical file must not prevent later commits from running.
-	writeFile(t, filepath.Join(linked, ".spor", "config.json"), "{")
-	runGit(t, linked, "add", ".spor/config.json")
+	writeFile(t, filepath.Join(linked, ".tillit", "config.json"), "{")
+	runGit(t, linked, "add", ".tillit/config.json")
 	runGit(t, linked, "commit", "-m", "bad config")
 	bad := strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD"))
-	runGit(t, linked, "rm", ".spor/config.json")
+	runGit(t, linked, "rm", ".tillit/config.json")
 	runGit(t, linked, "commit", "-m", "external config")
 	last := strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD"))
-	gitDir := strings.TrimSpace(runGit(t, linked, "rev-parse", "--absolute-git-dir"))
-	external := filepath.Join(gitDir, "spor", "config.json")
+	external := filepath.Join(gitDir, "tillit", "config.json")
 	writeExternal := func(value string) {
 		t.Helper()
 		data, marshalErr := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})

@@ -8,17 +8,17 @@ import (
 	"syscall"
 )
 
-// ErrWriterBusy means another Spor operation owns the worktree's writer lock.
-var ErrWriterBusy = errors.New("another Spor operation is running; try again")
+// ErrWriterBusy means another Tillit operation owns the worktree's writer lock.
+var ErrWriterBusy = errors.New("another Tillit operation is running; try again")
 
-// AcquireWriter serializes worktree state mutations across Spor processes.
+// AcquireWriter serializes worktree state mutations across Tillit processes.
 func AcquireWriter(repoPath string) (*os.File, error) {
 	repo, gitDir, err := Open(repoPath)
 	if err != nil {
 		return nil, err
 	}
 	_ = repo.Close()
-	dir := filepath.Join(gitDir, "spor")
+	dir := filepath.Join(gitDir, "tillit")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
 	}
@@ -31,7 +31,7 @@ func AcquireWriter(repoPath string) (*os.File, error) {
 		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
 			return nil, ErrWriterBusy
 		}
-		return nil, fmt.Errorf("acquire Spor writer lock: %w", err)
+		return nil, fmt.Errorf("acquire Tillit writer lock: %w", err)
 	}
 	return file, nil
 }

@@ -16,7 +16,7 @@ const (
 
 // Open opens the daemon log under the worktree's Git directory.
 func Open(gitDir string) (*Log, error) {
-	path := filepath.Join(gitDir, "spor", "daemon.log")
+	path := filepath.Join(gitDir, "tillit", "daemon.log")
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("create daemon log directory: %w", err)
 	}

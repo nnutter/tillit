@@ -1,12 +1,11 @@
-# Spor
+# Tillit
 
-- Spor should track application state in a SQLite database in the Git worktree's git-dir, under a spor subfolder.
-- Spor should use `pi` to call a coding agent for specified coding agent tasks using a configured provider/model.
-- Spor configuration should follow a hierarchy:
-  - Global configuration in `~/.config/spor/config.json`
-  - Repository configuration in `spor/config.json` in the Git worktree's git-common-dir
-  - Worktree configuration in `spor/config.json` in the Git worktree's git-dir
-  - Highest-priority configuration in `.spor/config.json` at the worktree root
+- Tillit should track application state in a SQLite database in the Git worktree's git-dir, under a tillit subfolder.
+- Tillit configuration should follow a hierarchy:
+  - Global configuration in `~/.config/tillit/config.json`
+  - Repository configuration in `tillit/config.json` in the Git worktree's git-common-dir
+  - Worktree configuration in `tillit/config.json` in the Git worktree's git-dir
+  - Highest-priority configuration in `.tillit/config.json` at the worktree root
 
 ## Skills
 
@@ -33,8 +32,4 @@ Load these when that API is part of the change:
 - `go-modern-testing-t-context` when a test needs a context.
 - `go-modern-context-cancel-cause`, `go-modern-context-after-func`, and `go-modern-context-timeout-deadline-cause` when work must stop with a cause, cleanup, or a deadline.
 - `go-modern-sync-waitgroup-go` when a `sync.WaitGroup` tracks goroutines.
-- `go-modern-json-v2` and `go-modern-json-omitzero` when reading or writing JSON, including Spor configuration.
-
-## Subagents
-
-Use gpt-6.1-sol on high effort for planning and delegate all work to a subagent running gpt-6.1-terra on medium effort.
+- `go-modern-json-v2` and `go-modern-json-omitzero` when reading or writing JSON, including Tillit configuration.

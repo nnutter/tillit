@@ -453,12 +453,6 @@ aube = { path = ".mise/locks/npm-oxlint/1.94.0", digest = "sha256:a253bc49b893f7
 backend = "npm:oxlint"
 specifiers = ["latest"]
 
-[[tools."npm:pele"]]
-version = "1.13.0"
-aube = { path = ".mise/locks/npm-pele/1.13.0", digest = "sha256:110924aec896914a491b529768ecaa99cce8c5585e317915f6c2869c286a5be0" }
-backend = "npm:pele"
-specifiers = ["1.13.0"]
-
 [[tools."npm:typescript"]]
 version = "7.0.2"
 aube = { path = ".mise/locks/npm-typescript/7.0.2", digest = "sha256:3d06b3b23564c68cdad7815c356edb1506fab1c42bfb8c54234134fd9650ec17" }

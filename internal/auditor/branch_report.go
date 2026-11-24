@@ -12,13 +12,22 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"github.com/nnutter/spor/internal/config"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/config"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // ReportBranch reports cached validation for every commit in a branch snapshot.
 // It neither runs validation nor changes the checkout or validation records.
 func ReportBranch(ctx context.Context, repoPath string) (BranchResult, error) {
+	return reportBranch(ctx, repoPath, false)
+}
+
+// ReportEvidence includes the recorded commands and output in the branch report.
+func ReportEvidence(ctx context.Context, repoPath string) (BranchResult, error) {
+	return reportBranch(ctx, repoPath, true)
+}
+
+func reportBranch(ctx context.Context, repoPath string, includeEvidence bool) (BranchResult, error) {
 	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
 	if err != nil {
 		return BranchResult{}, err
@@ -35,6 +44,10 @@ func ReportBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 	if db != nil {
 		defer func() { _ = db.Close() }()
 	}
+	hasEvidence, err := reportEvidenceColumn(ctx, db, includeEvidence)
+	if err != nil {
+		return BranchResult{}, err
+	}
 	result := BranchResult{Snapshot: snapshot}
 	for _, hash := range snapshot.Commits {
 		if err := ctx.Err(); err != nil {
@@ -44,7 +57,7 @@ func ReportBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 		if err != nil {
 			return result, err
 		}
-		outcome, err := branchReportOutcome(ctx, db, gitDir, commit)
+		outcome, err := branchReportOutcome(ctx, db, hasEvidence, gitDir, commit)
 		if err != nil {
 			return result, err
 		}
@@ -53,8 +66,18 @@ func ReportBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 	return result, nil
 }
 
+func reportEvidenceColumn(ctx context.Context, db *sql.DB, includeEvidence bool) (bool, error) {
+	if !includeEvidence {
+		return false, nil
+	}
+	if db == nil {
+		return false, nil
+	}
+	return branchEvidenceColumn(ctx, db)
+}
+
 func openBranchReport(ctx context.Context, gitDir string) (*sql.DB, error) {
-	path := filepath.Join(gitDir, "spor", "state.db")
+	path := filepath.Join(gitDir, "tillit", "state.db")
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	} else if err != nil {
@@ -78,7 +101,7 @@ func openBranchReport(ctx context.Context, gitDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-func branchReportOutcome(ctx context.Context, db *sql.DB, gitDir string, commit *object.Commit) (BranchOutcome, error) {
+func branchReportOutcome(ctx context.Context, db *sql.DB, hasEvidence bool, gitDir string, commit *object.Commit) (BranchOutcome, error) {
 	out := BranchOutcome{Hash: commit.Hash.String(), Subject: subjectOf(commit.Message), State: "pending"}
 	data, err := historicalConfig(commit)
 	if err != nil {
@@ -100,7 +123,7 @@ func branchReportOutcome(ctx context.Context, db *sql.DB, gitDir string, commit 
 	if err != nil {
 		return out, err
 	}
-	err = db.QueryRowContext(ctx, `SELECT state, error FROM branch_validation WHERE commit_hash = ? AND input = ?`, out.Hash, key).Scan(&out.State, &out.Error)
+	err = readBranchOutcome(ctx, db, hasEvidence, key, &out)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return out, fmt.Errorf("read branch validation: %w", err)
 	}
@@ -108,7 +131,7 @@ func branchReportOutcome(ctx context.Context, db *sql.DB, gitDir string, commit 
 }
 
 func historicalConfig(commit *object.Commit) ([]byte, error) {
-	file, err := commit.File(".spor/config.json")
+	file, err := commit.File(".tillit/config.json")
 	if errors.Is(err, object.ErrFileNotFound) {
 		return nil, nil
 	}

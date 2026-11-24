@@ -9,7 +9,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 func TestRunCommandCancellationIsNotValidationFailure(t *testing.T) {
@@ -27,7 +27,7 @@ func TestRunCommandCancellationIsNotValidationFailure(t *testing.T) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		passed, err := runCommand(ctx, gitDir, []string{"sh", "-c", "(sleep 1; touch \"$2\") & touch \"$1\"; wait", "sh", started, descendantOutput})
+		passed, _, err := runCommand(ctx, gitDir, []string{"sh", "-c", "(sleep 1; touch \"$2\") & touch \"$1\"; wait", "sh", started, descendantOutput}, false)
 		done <- result{passed, err}
 	}()
 	require.Eventually(t, func() bool {
