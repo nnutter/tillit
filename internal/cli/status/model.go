@@ -452,15 +452,8 @@ func (m model) View() tea.View {
 
 func (m *model) rebuildTableLocked() {
 	cols, rows := buildTableData(m.branch, m.verification, m.theme)
-	// Preserve cursor position when possible.
-	cursor := m.table.Cursor()
 	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
-	if cursor < len(rows) {
-		for range cursor {
-			m.table.MoveDown(1)
-		}
-	}
 }
 
 func (m model) refreshCmd() tea.Cmd {
