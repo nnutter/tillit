@@ -36,6 +36,8 @@ The TUI auto-refreshes every 250ms (configurable with --interval) so that
 validation states transition pending → running → passed/failed without restart.
 Status starts the daemon automatically if it is not already running;
 use --no-start to disable auto-start.
+In the TUI, select a commit and press <enter> to see its feedback in a pop-over
+(scroll with ↑/↓, esc/enter to close).
 `,
 		Args: cobra.NoArgs,
 		RunE: run,

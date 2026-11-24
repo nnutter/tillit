@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/table"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
@@ -26,6 +27,7 @@ type KeyMap struct {
 	PageDown  key.Binding
 	Top       key.Binding
 	Bottom    key.Binding
+	Detail    key.Binding
 	Quit      key.Binding
 	Help      key.Binding
 	ForceQuit key.Binding
@@ -34,12 +36,12 @@ type KeyMap struct {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.PageUp, k.PageDown, k.Top, k.Bottom},
-		{k.Help, k.Quit, k.ForceQuit},
+		{k.Detail, k.Help, k.Quit, k.ForceQuit},
 	}
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Help, k.Quit}
+	return []key.Binding{k.Up, k.Down, k.Detail, k.Help}
 }
 
 func defaultKeyMap() KeyMap {
@@ -67,6 +69,10 @@ func defaultKeyMap() KeyMap {
 		Bottom: key.NewBinding(
 			key.WithKeys("G", "end"),
 			key.WithHelp("G/end", "go to end"),
+		),
+		Detail: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "view feedback"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "esc"),
@@ -103,6 +109,13 @@ type model struct {
 	table table.Model
 	help  help.Model
 	keys  KeyMap
+
+	// Pop-over feedback detail.
+	showDetail     bool
+	detailHash     string
+	detailOutcome  auditor.BranchOutcome
+	detailViewport viewport.Model
+	detailLoading  bool
 }
 
 type refreshMsg struct {
@@ -111,6 +124,12 @@ type refreshMsg struct {
 	daemonRunning bool
 	fetchErr      error
 	at            time.Time
+}
+
+type feedbackMsg struct {
+	hash    string
+	outcome auditor.BranchOutcome
+	err     error
 }
 
 // NewModel creates a status model.
@@ -148,6 +167,8 @@ func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchR
 	// Apply our keymap to help.
 	m.help = help.New()
 	m.help.SetWidth(80)
+	m.detailViewport = viewport.New(viewport.WithWidth(70), viewport.WithHeight(16))
+	m.detailViewport.SoftWrap = true
 	return m
 }
 
@@ -174,6 +195,79 @@ func fetchStatusMsg(ctx context.Context, repo string, at time.Time) refreshMsg {
 		daemonRunning: running,
 		at:            at,
 	}
+}
+
+func fetchFeedbackMsg(ctx context.Context, repo, hash string) feedbackMsg {
+	result, err := auditor.ReportEvidence(ctx, repo)
+	if err != nil {
+		return feedbackMsg{hash: hash, err: err}
+	}
+	for _, outcome := range result.Outcomes {
+		if outcome.Hash == hash {
+			return feedbackMsg{hash: hash, outcome: outcome}
+		}
+	}
+	return feedbackMsg{hash: hash, err: fmt.Errorf("commit not found in feedback: %s", hash)}
+}
+
+func isNonEmpty(s string) bool { return s != "" }
+func hasFailureTitle(f auditor.Failure) bool {
+	return isNonEmpty(f.Kind) || isNonEmpty(f.Package) || isNonEmpty(f.Test)
+}
+
+func formatFeedbackHeader(outcome auditor.BranchOutcome, theme ui.Theme) string {
+	var b strings.Builder
+	b.WriteString(theme.DetailTitle.Render(fmt.Sprintf("Commit %s  %s", ui.ShortHash(outcome.Hash), outcome.Subject)))
+	b.WriteString("\n")
+	b.WriteString(theme.Subtitle.Render(fmt.Sprintf("hash %s  validation: %s", outcome.Hash, outcome.State)))
+	b.WriteString("\n")
+	if hasError(outcome.Error) {
+		b.WriteString(outcome.Error)
+		b.WriteString("\n")
+	}
+	return b.String()
+}
+
+func formatFeedbackBody(ev *auditor.Evidence) string {
+	var b strings.Builder
+	b.WriteString("\n")
+	b.WriteString(fmt.Sprintf("  Command: %q\n", ev.Command))
+	if len(ev.Failures) == 0 {
+		b.WriteString(strings.TrimRight(ev.Output, "\n"))
+		b.WriteString("\n")
+	}
+	for _, f := range ev.Failures {
+		if hasFailureTitle(f) {
+			b.WriteString(fmt.Sprintf(" %s %s %s\n", f.Kind, f.Package, f.Test))
+		}
+		if isNonEmpty(f.Output) {
+			b.WriteString(strings.TrimRight(f.Output, "\n"))
+			b.WriteString("\n")
+		}
+		if f.OutputTruncated {
+			b.WriteString("    Failure output truncated\n")
+		}
+		for _, r := range f.Reproductions {
+			b.WriteString(fmt.Sprintf("    Rerun (%s): %q\n", r.State, r.Command))
+		}
+	}
+	if ev.OutputTruncated {
+		b.WriteString("  Command transcript truncated\n")
+	}
+	return b.String()
+}
+
+func formatFeedback(outcome auditor.BranchOutcome, theme ui.Theme) string {
+	var b strings.Builder
+	b.WriteString(formatFeedbackHeader(outcome, theme))
+	if outcome.Evidence == nil {
+		b.WriteString("\n")
+		b.WriteString("No feedback recorded for this commit.\n")
+		b.WriteString("It is either pending/running (daemon still validating)\nor has passed without evidence (check `tillit feedback --json`).\n")
+		return b.String()
+	}
+	b.WriteString(formatFeedbackBody(outcome.Evidence))
+	return b.String()
 }
 
 func tableStyles(theme ui.Theme) table.Styles {
@@ -250,6 +344,17 @@ func truncateSubject(s string, max int) string {
 	return s[:max-3] + "..."
 }
 
+func overlayWith(base, overlay string, width, height int) string {
+	// Use lipgloss.Place to center overlay over base when we have dimensions.
+	if !shouldOverlay(width, height) {
+		return overlay
+	}
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, overlay,
+		lipgloss.WithWhitespaceChars(" "),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle()),
+	)
+}
+
 func (m model) Init() tea.Cmd {
 	if m.repo == "" {
 		return nil
@@ -260,54 +365,18 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case refreshMsg:
-		m.lastFetch = msg.at
-		m.fetchErr = msg.fetchErr
-		if msg.fetchErr == nil {
-			m.branch = msg.branch
-			m.verification = msg.verification
-			m.daemonRunning = msg.daemonRunning
-			m.rebuildTableLocked()
-		}
-		// Schedule next periodic refresh.
-		return m, m.refreshCmd()
-
+		return updateRefreshMsg(&m, msg)
+	case feedbackMsg:
+		return updateFeedbackMsg(&m, msg)
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		// Resize table proportionally.
-		// Keep at least small size.
-		w := max(40, msg.Width-4)
-		h := max(8, msg.Height-12)
-		m.table.SetWidth(w)
-		m.table.SetHeight(h)
-		m.help.SetWidth(w)
-		var cmd tea.Cmd
-		m.table, cmd = m.table.Update(msg)
-		return m, cmd
-
+		return updateWindowSizeMsg(&m, msg)
 	case tea.BackgroundColorMsg:
-		// Adapt theme to light/dark.
-		m.theme = ui.New(m.theme.ColorEnabled, msg.IsDark())
-		// Rebuild styles.
-		m.table.SetStyles(tableStyles(m.theme))
-		m.help.Styles = help.DefaultStyles(msg.IsDark())
-		return m, nil
-
+		return updateBackgroundMsg(&m, msg)
 	case tea.KeyPressMsg:
-		switch {
-		case key.Matches(msg, m.keys.ForceQuit):
-			return m, tea.Quit
-		case key.Matches(msg, m.keys.Quit):
-			return m, tea.Quit
-		case key.Matches(msg, m.keys.Help):
-			m.help.ShowAll = !m.help.ShowAll
-			return m, nil
-		}
+		return updateKeyMsg(&m, msg)
+	default:
+		return updateOtherMsg(&m, msg)
 	}
-
-	var cmd tea.Cmd
-	m.table, cmd = m.table.Update(msg)
-	return m, cmd
 }
 
 func (m model) View() tea.View {
@@ -367,6 +436,14 @@ func (m model) View() tea.View {
 		content = m.theme.Document.Render(content)
 	}
 
+	// Overlay the feedback pop-over when a commit is selected.
+	if m.showDetail {
+		overlay := m.renderDetail()
+		if overlay != "" {
+			content = overlayWith(content, overlay, m.width, m.height)
+		}
+	}
+
 	v := tea.NewView(content)
 	v.AltScreen = true
 	v.WindowTitle = "Tillit Status"
@@ -400,10 +477,197 @@ func (m model) refreshCmd() tea.Cmd {
 	})
 }
 
+func (m model) renderDetail() string {
+	// Title for the pop-over.
+	outcome := m.detailOutcome
+	// Fall back to the branch outcome if feedback not yet loaded.
+	if outcome.Hash == "" && isDetailHashNonEmpty(&m) {
+		for _, o := range m.branch.Outcomes {
+			if o.Hash == m.detailHash {
+				outcome = o
+				break
+			}
+		}
+	}
+	title := fmt.Sprintf("Feedback — %s  %s", ui.ShortHash(outcome.Hash), outcome.Subject)
+	if m.detailLoading {
+		title += "  (loading…)"
+	}
+
+	// Build the pop-over body with a scrollable viewport.
+	inner := strings.Builder{}
+	inner.WriteString(m.theme.DetailTitle.Render(title))
+	inner.WriteString("\n")
+	if m.detailLoading {
+		inner.WriteString(m.detailViewport.View())
+	} else {
+		inner.WriteString(m.detailViewport.View())
+	}
+	inner.WriteString("\n")
+	footer := "↑/↓ scroll  •  esc/enter to close  •  q to close"
+	if !m.theme.ColorEnabled {
+		footer = "up/down scroll  esc/enter to close"
+	}
+	inner.WriteString(m.theme.DetailFooter.Render(footer))
+
+	body := inner.String()
+	if m.theme.ColorEnabled {
+		body = m.theme.DetailBorder.Render(body)
+		// Also render with a faint background dim via lipgloss?
+	}
+	return body
+}
+
+func updateRefreshMsg(m *model, msg refreshMsg) (tea.Model, tea.Cmd) {
+	m.lastFetch = msg.at
+	m.fetchErr = msg.fetchErr
+	if msg.fetchErr == nil {
+		m.branch = msg.branch
+		m.verification = msg.verification
+		m.daemonRunning = msg.daemonRunning
+		m.rebuildTableLocked()
+		if isShowingDetail(m) {
+			return *m, m.refreshCmd()
+		}
+	}
+	return *m, m.refreshCmd()
+}
+
+func updateFeedbackMsg(m *model, msg feedbackMsg) (tea.Model, tea.Cmd) {
+	m.detailLoading = false
+	m.detailOutcome = msg.outcome
+	if msg.err != nil {
+		m.detailViewport.SetContent(fmt.Sprintf("Error loading feedback: %v", msg.err))
+	} else {
+		m.detailViewport.SetContent(formatFeedback(msg.outcome, m.theme))
+		m.detailViewport.GotoTop()
+	}
+	return *m, nil
+}
+
+func updateWindowSizeMsg(m *model, msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
+	m.width = msg.Width
+	m.height = msg.Height
+	w := max(40, msg.Width-4)
+	h := max(8, msg.Height-12)
+	m.table.SetWidth(w)
+	m.table.SetHeight(h)
+	m.help.SetWidth(w)
+	vw := max(40, w-10)
+	vh := max(8, h-8)
+	m.detailViewport.SetWidth(vw)
+	m.detailViewport.SetHeight(vh)
+	var cmd tea.Cmd
+	m.table, cmd = m.table.Update(msg)
+	return *m, cmd
+}
+
+func updateBackgroundMsg(m *model, msg tea.BackgroundColorMsg) (tea.Model, tea.Cmd) {
+	m.theme = ui.New(m.theme.ColorEnabled, msg.IsDark())
+	m.table.SetStyles(tableStyles(m.theme))
+	m.help.Styles = help.DefaultStyles(msg.IsDark())
+	if m.showDetail {
+		m.detailViewport.SetContent(formatFeedback(m.detailOutcome, m.theme))
+		m.detailViewport.GotoTop()
+	}
+	return *m, nil
+}
+
+func updateOtherMsg(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+	if m.showDetail {
+		m.detailViewport, cmd = m.detailViewport.Update(msg)
+	} else {
+		m.table, cmd = m.table.Update(msg)
+	}
+	return *m, cmd
+}
+
+func updateKeyMsg(m *model, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.showDetail {
+		return updateDetailKey(m, msg)
+	}
+	switch {
+	case key.Matches(msg, m.keys.ForceQuit):
+		return *m, tea.Quit
+	case key.Matches(msg, m.keys.Quit):
+		return *m, tea.Quit
+	case key.Matches(msg, m.keys.Help):
+		m.help.ShowAll = !m.help.ShowAll
+		return *m, nil
+	case key.Matches(msg, m.keys.Detail):
+		return openDetail(m)
+	}
+	var cmd tea.Cmd
+	m.table, cmd = m.table.Update(msg)
+	return *m, cmd
+}
+
+func updateDetailKey(m *model, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case key.Matches(msg, m.keys.ForceQuit):
+		return *m, tea.Quit
+	case key.Matches(msg, m.keys.Quit):
+		m.showDetail = false
+		m.detailHash = ""
+		return *m, nil
+	case key.Matches(msg, m.keys.Detail):
+		m.showDetail = false
+		m.detailHash = ""
+		return *m, nil
+	}
+	var cmd tea.Cmd
+	m.detailViewport, cmd = m.detailViewport.Update(msg)
+	return *m, cmd
+}
+
+func openDetail(m *model) (tea.Model, tea.Cmd) {
+	if m.repo == "" {
+		return *m, nil
+	}
+	cursor := m.table.Cursor()
+	if !isCursorValid(cursor, len(m.branch.Outcomes)) {
+		return *m, nil
+	}
+	m.showDetail = true
+	m.detailHash = m.branch.Outcomes[cursor].Hash
+	m.detailLoading = true
+	m.detailViewport.SetContent("Loading feedback…")
+	m.detailViewport.GotoTop()
+	if m.width > 0 {
+		m.detailViewport.SetWidth(max(40, m.width-10))
+		m.detailViewport.SetHeight(max(8, m.height-8))
+	}
+	return *m, tea.Batch(
+		func() tea.Msg {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			return fetchFeedbackMsg(ctx, m.repo, m.detailHash)
+		},
+		nil,
+	)
+}
+
 func isColorEnabled(t ui.Theme) bool  { return t.ColorEnabled }
 func isColorDisabled(t ui.Theme) bool { return !t.ColorEnabled }
 func hasError(s string) bool          { return s != "" }
 func isPositive(n int) bool           { return n > 0 }
+func isDetailHashNonEmpty(m *model) bool {
+	return m != nil && isNonEmpty(m.detailHash)
+}
+
+func isShowingDetail(m *model) bool {
+	return m.showDetail && isDetailHashNonEmpty(m)
+}
+func isNonNegative(n int) bool { return n >= 0 }
+func isLessThan(a, b int) bool { return a < b }
+func isCursorValid(cursor, length int) bool {
+	return isNonNegative(cursor) && isLessThan(cursor, length)
+}
+
+func shouldOverlay(width, height int) bool {
+	return isPositive(width) && isPositive(height)
+}
 
 func countValidation(outcomes []auditor.BranchOutcome) (passed, failed, pending, running, errCount int) {
 	for _, o := range outcomes {

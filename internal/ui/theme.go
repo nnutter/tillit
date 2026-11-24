@@ -63,6 +63,12 @@ type Theme struct {
 	TableSelected lipgloss.Style
 	TableCursor   lipgloss.Style
 
+	// Pop-over / detail styles for feedback view.
+	DetailBorder  lipgloss.Style
+	DetailTitle   lipgloss.Style
+	DetailContent lipgloss.Style
+	DetailFooter  lipgloss.Style
+
 	// Semantic symbols.
 	SymPassed            string
 	SymFailed            string
@@ -125,6 +131,10 @@ func New(colorEnabled, hasDark bool) Theme {
 		t.TableCell = lipgloss.NewStyle()
 		t.TableSelected = lipgloss.NewStyle()
 		t.TableCursor = lipgloss.NewStyle()
+		t.DetailBorder = lipgloss.NewStyle()
+		t.DetailTitle = lipgloss.NewStyle()
+		t.DetailContent = lipgloss.NewStyle()
+		t.DetailFooter = lipgloss.NewStyle()
 		return t
 	}
 
@@ -225,6 +235,21 @@ func New(colorEnabled, hasDark bool) Theme {
 		Padding(0, 0, 0, 1)
 	t.TableCursor = lipgloss.NewStyle().
 		Foreground(cInfo)
+
+	// Pop-over detail - centered feedback window.
+	t.DetailBorder = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(cPrimary).
+		Background(ld(lipgloss.Color("#FFFFFF"), lipgloss.Color("#0F0F0F"))).
+		Padding(1, 2)
+	t.DetailTitle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(cPrimary)
+	t.DetailContent = lipgloss.NewStyle().
+		Foreground(ld(lipgloss.Color("#1a1a1a"), lipgloss.Color("#dddddd")))
+	t.DetailFooter = lipgloss.NewStyle().
+		Foreground(cMuted).
+		Italic(true)
 
 	return t
 }
