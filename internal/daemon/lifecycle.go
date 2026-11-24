@@ -50,7 +50,7 @@ func lifecyclePaths(repoPath string) (string, string, string, error) {
 }
 
 // Start launches a detached, supervised daemon and waits for readiness.
-func Start(ctx context.Context, repoPath string, auto bool) (string, error) {
+func Start(ctx context.Context, repoPath string) (string, error) {
 	root, gitDir, _, err := lifecyclePaths(repoPath)
 	if err != nil {
 		return "", err
@@ -64,11 +64,7 @@ func Start(ctx context.Context, repoPath string, auto bool) (string, error) {
 		return "", err
 	}
 	defer func() { _ = read.Close() }()
-	args := []string{"__spor_supervisor", root}
-	if auto {
-		args = append(args, "auto")
-	}
-	cmd := exec.Command(exe, args...)
+	cmd := exec.Command(exe, "__spor_supervisor", root)
 	cmd.Stdin = zeroReader()
 	cmd.Stdout, cmd.Stderr = zeroReader(), zeroReader()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -264,7 +260,7 @@ func (r stopRequest) respond(message string) {
 }
 
 // Supervise owns the worker process and provides responsive stop control.
-func Supervise(repoPath string, auto bool, startup *os.File) (result error) {
+func Supervise(repoPath string, startup *os.File) (result error) {
 	sent := false
 	defer func() {
 		if !sent {
@@ -303,7 +299,7 @@ func Supervise(repoPath string, auto bool, startup *os.File) (result error) {
 		return err
 	}
 	defer func() { _ = log.Close() }()
-	return superviseWorker(root, auto, startup, listener, log, &sent, cleanup)
+	return superviseWorker(root, startup, listener, log, &sent, cleanup)
 }
 
 func lockSupervisor(gitDir string) (*os.File, error) {
@@ -339,7 +335,7 @@ func listenControl(socket string) (net.Listener, error) {
 	return listener, nil
 }
 
-func superviseWorker(root string, auto bool, startup *os.File, listener net.Listener, log io.Writer, sent *bool, cleanup func()) error {
+func superviseWorker(root string, startup *os.File, listener net.Listener, log io.Writer, sent *bool, cleanup func()) error {
 	exe, err := os.Executable()
 	if err != nil {
 		return err
@@ -364,11 +360,7 @@ func superviseWorker(root string, auto bool, startup *os.File, listener net.List
 		return err
 	}
 	defer func() { _ = outputRead.Close(); _ = outputWrite.Close() }()
-	args := []string{"__spor_worker", root}
-	if auto {
-		args = append(args, "auto")
-	}
-	cmd := exec.Command(exe, args...)
+	cmd := exec.Command(exe, "__spor_worker", root)
 	cmd.Stdin = zeroReader()
 	cmd.Stdout, cmd.Stderr = outputWrite, outputWrite
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -592,14 +584,14 @@ func acceptStops(listener net.Listener, requests chan<- stopRequest) {
 }
 
 // Worker runs the daemon in a supervised process, reporting startup errors.
-func Worker(ctx context.Context, repoPath string, auto bool, ready, supervisor *os.File) error {
+func Worker(ctx context.Context, repoPath string, ready, supervisor *os.File) error {
 	subprocess.UseInheritedProcessGroup()
 	go func() {
 		_, _ = io.Copy(io.Discard, supervisor)
 		_ = syscall.Kill(-os.Getpid(), syscall.SIGKILL)
 	}()
 	signaled := false
-	err := RunReady(ctx, repoPath, auto, func() {
+	err := runReady(ctx, repoPath, func() {
 		_, _ = fmt.Fprintln(ready, "ready")
 		signaled = true
 	})

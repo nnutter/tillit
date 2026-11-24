@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"errors"
 	"fmt"
 	"os"
@@ -42,7 +41,7 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 			_ = cmd.Run()
 		}
 	})
-	out, err := call(repo, "start", "--auto")
+	out, err := call(repo, "start")
 	require.NoError(t, err, "%s", out)
 	logPath := filepath.Join(repo, ".git", "spor", "daemon.log")
 	require.Contains(t, out, logPath)
@@ -53,12 +52,6 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 		data, _ := os.ReadFile(logPath)
 		return strings.Contains(string(data), "validation-output")
 	}, 10*time.Second, 20*time.Millisecond)
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(repo, ".git", "spor", "state.db"))
-	require.NoError(t, err)
-	defer func() { _ = db.Close() }()
-	var count int
-	require.NoError(t, db.QueryRowContext(t.Context(), "SELECT count(*) FROM auto_session WHERE expires > ?", time.Now().UnixNano()).Scan(&count))
-	require.Equal(t, 1, count)
 	out, err = call(repo, "start")
 	require.Error(t, err)
 	require.Contains(t, out, "already running")
