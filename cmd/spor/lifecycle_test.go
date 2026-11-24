@@ -16,9 +16,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/spor/internal/testutil"
 )
 
 func TestDetachedDaemonLifecycle(t *testing.T) {
+	testutil.IsolateGit(t)
 	bin := filepath.Join(t.TempDir(), "spor")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
@@ -89,6 +91,7 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 }
 
 func TestStopKillStopsValidationDescendants(t *testing.T) {
+	testutil.IsolateGit(t)
 	bin := filepath.Join(t.TempDir(), "spor")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
@@ -134,7 +137,7 @@ func cleanTestEnv(home string) []string {
 	var env []string
 	for _, entry := range os.Environ() {
 		key, _, _ := strings.Cut(entry, "=")
-		if key == "HOME" || strings.HasPrefix(key, "GIT_") {
+		if key == "HOME" {
 			continue
 		}
 		env = append(env, entry)

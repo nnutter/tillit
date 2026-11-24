@@ -11,9 +11,11 @@ import (
 
 	"github.com/nnutter/spor/internal/auditor"
 	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/spor/internal/testutil"
 )
 
 func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
+	testutil.IsolateGit(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
@@ -64,6 +66,7 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 }
 
 func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
+	testutil.IsolateGit(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/spor/internal/smith"
+	"github.com/nnutter/spor/internal/testutil"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 
 func fixture(t *testing.T, command string) (string, string) {
 	t.Helper()
+	testutil.IsolateGit(t)
 	t.Setenv("HOME", t.TempDir())
 	root := t.TempDir()
 	mustGit(t, root, "init", "-b", "feature")
@@ -63,6 +65,19 @@ func state(t *testing.T, dir string) string {
 	var value string
 	require.NoError(t, db.QueryRow(`SELECT state FROM auto_snapshot ORDER BY id DESC LIMIT 1`).Scan(&value))
 	return value
+}
+
+func TestFixtureLeavesCallerRepositoryUntouched(t *testing.T) {
+	caller := t.TempDir()
+	mustGit(t, caller, "init")
+	callerGitDir := filepath.Join(caller, ".git")
+	t.Setenv("GIT_DIR", callerGitDir)
+	t.Setenv("GIT_WORK_TREE", caller)
+	t.Setenv("GIT_PREFIX", "")
+
+	root, gitDir := fixture(t, "true")
+	require.NoDirExists(t, filepath.Join(callerGitDir, "spor"))
+	require.Equal(t, filepath.Join(root, ".git"), gitDir)
 }
 
 func TestPublishesOnlyValidatedRefactorsWithoutWritingFiles(t *testing.T) {

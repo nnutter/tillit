@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/spor/internal/smith"
+	"github.com/nnutter/spor/internal/testutil"
 )
 
 func TestAddRenameLeavesTheUserRepoAndWritesTwoCommits(t *testing.T) {
@@ -228,7 +229,7 @@ func TestAddRequiresAGitUser(t *testing.T) {
 
 func TestAddRequiresACommit(t *testing.T) {
 	dir := t.TempDir()
-	scrubGitEnv(t)
+	testutil.IsolateGit(t)
 	_, err := git.PlainInit(dir, false)
 	require.NoError(t, err)
 
@@ -237,7 +238,7 @@ func TestAddRequiresACommit(t *testing.T) {
 }
 
 func TestAddRejectsAMissingRepository(t *testing.T) {
-	scrubGitEnv(t)
+	testutil.IsolateGit(t)
 	dir, err := os.MkdirTemp("/tmp", "spor-smith-")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = os.RemoveAll(dir) })
@@ -406,7 +407,7 @@ func TestAddRejectsAConflictedIndex(t *testing.T) {
 }
 
 func TestAddInALinkedWorktreeKeepsStateThere(t *testing.T) {
-	scrubGitEnv(t)
+	testutil.IsolateGit(t)
 	base := t.TempDir()
 	mainDir := filepath.Join(base, "main")
 	linkedDir := filepath.Join(base, "linked")
@@ -490,7 +491,7 @@ func f(a, b int) {
 
 func newRepo(t *testing.T, name string, body []byte) (*git.Repository, string) {
 	t.Helper()
-	scrubGitEnv(t)
+	testutil.IsolateGit(t)
 	dir := t.TempDir()
 	repo, err := git.PlainInit(dir, false)
 	require.NoError(t, err)
@@ -743,43 +744,7 @@ func linkedGitDir(t *testing.T, dir string) string {
 func runGit(t *testing.T, args ...string) string {
 	t.Helper()
 	cmd := exec.CommandContext(t.Context(), "git", args...)
-	cmd.Env = withoutGitEnv(os.Environ())
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 	return string(out)
-}
-
-func withoutGitEnv(env []string) []string {
-	skip := make(map[string]bool, len(gitEnvKeys))
-	for _, key := range gitEnvKeys {
-		skip[key] = true
-	}
-	out := make([]string, 0, len(env))
-	for _, kv := range env {
-		key, _, _ := strings.Cut(kv, "=")
-		if skip[key] {
-			continue
-		}
-		out = append(out, kv)
-	}
-	return out
-}
-
-func scrubGitEnv(t *testing.T) {
-	t.Helper()
-	for _, key := range gitEnvKeys {
-		t.Setenv(key, "")
-	}
-}
-
-var gitEnvKeys = []string{
-	"GIT_DIR",
-	"GIT_WORK_TREE",
-	"GIT_INDEX_FILE",
-	"GIT_COMMON_DIR",
-	"GIT_OBJECT_DIRECTORY",
-	"GIT_ALTERNATE_OBJECT_DIRECTORIES",
-	"GIT_PREFIX",
-	"GIT_EXEC_PATH",
-	"GIT_SEQUENCE_EDITOR",
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/nnutter/spor/internal/daemon"
 	"github.com/nnutter/spor/internal/repository"
 	"github.com/nnutter/spor/internal/smith"
+	"github.com/nnutter/spor/internal/testutil"
 )
 
 func TestProcessPendingAdd(t *testing.T) {
@@ -100,9 +101,7 @@ func f() {
 
 func newRepo(t *testing.T) string {
 	t.Helper()
-	for _, key := range []string{"GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR"} {
-		t.Setenv(key, "")
-	}
+	testutil.IsolateGit(t)
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	repo, err := git.PlainInit(dir, false)
