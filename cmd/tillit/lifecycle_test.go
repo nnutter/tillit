@@ -22,7 +22,7 @@ import (
 func TestDetachedDaemonLifecycle(t *testing.T) {
 	gittest.WithSetenvEnviron(t)
 	bin := filepath.Join(t.TempDir(), "tillit")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
+	build := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
 	require.NoError(t, err, "%s", buildOut)
 	home := t.TempDir()
@@ -134,7 +134,7 @@ func checkForeground(t *testing.T, bin, repo string, env []string, interrupt boo
 func TestStopKillStopsValidationDescendants(t *testing.T) {
 	gittest.WithSetenvEnviron(t)
 	bin := filepath.Join(t.TempDir(), "tillit")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
+	build := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
 	require.NoError(t, err, "%s", buildOut)
 	home := t.TempDir()
