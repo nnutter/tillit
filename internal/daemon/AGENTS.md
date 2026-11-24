@@ -1,6 +1,6 @@
 # Daemon
 
-- The Spor daemon checks the existing feature-branch commits for a given Git worktree.
+- The Tillit daemon checks the existing feature-branch commits for a given Git worktree.
 
 ## Skills
 

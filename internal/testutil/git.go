@@ -1,4 +1,4 @@
-// Package testutil provides shared helpers for Spor tests.
+// Package testutil provides shared helpers for Tillit tests.
 package testutil
 
 import (

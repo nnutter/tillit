@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/config"
+	"github.com/nnutter/tillit/internal/config"
 )
 
 func TestKeysUseTheDocumentJSONNames(t *testing.T) {

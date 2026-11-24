@@ -1,4 +1,4 @@
-// Package repository opens the git worktree spor is acting on.
+// Package repository opens the git worktree tillit is acting on.
 package repository
 
 import (

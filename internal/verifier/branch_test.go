@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	_ "modernc.org/sqlite"
 
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
 func TestBranchVerificationRetriesReportedError(t *testing.T) {
@@ -67,7 +67,7 @@ func TestBranchVerificationPersistence(t *testing.T) {
 	writeTestFile(t, repo, "note", "change")
 	gitTest(t, repo, "add", ".")
 	gitTest(t, repo, "commit", "-qm", "unsupported")
-	path := filepath.Join(repo, ".git", "spor", "state.db")
+	path := filepath.Join(repo, ".git", "tillit", "state.db")
 	before, err := verifier.ReportBranch(t.Context(), repo)
 	require.NoError(t, err)
 	require.Len(t, before.Outcomes, 2)

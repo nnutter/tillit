@@ -1,4 +1,4 @@
-module github.com/nnutter/spor
+module github.com/nnutter/tillit
 
 go 1.27.4
 

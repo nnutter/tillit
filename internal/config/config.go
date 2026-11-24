@@ -1,4 +1,4 @@
-// Package config loads spor's layered configuration.
+// Package config loads tillit's layered configuration.
 package config
 
 import (
@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // Mode selects which recorded identity counts as already validated.
@@ -80,7 +80,7 @@ func LoadAt(sourceGitDir, root string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	return apply(cfg, filepath.Join(root, ".spor", "config.json"))
+	return apply(cfg, filepath.Join(root, ".tillit", "config.json"))
 }
 
 // LoadHistorical merges external settings with a historical root config, if present.
@@ -92,7 +92,7 @@ func LoadHistorical(sourceGitDir string, data []byte) (Config, error) {
 	if data == nil {
 		return cfg, nil
 	}
-	doc, err := decodeDocument(data, ".spor/config.json")
+	doc, err := decodeDocument(data, ".tillit/config.json")
 	if err != nil {
 		return Config{}, err
 	}
@@ -105,7 +105,7 @@ func loadExternal(gitDir string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	cfg, err = apply(cfg, filepath.Join(home, ".config", "spor", "config.json"))
+	cfg, err = apply(cfg, filepath.Join(home, ".config", "tillit", "config.json"))
 	if err != nil {
 		return Config{}, err
 	}
@@ -113,12 +113,12 @@ func loadExternal(gitDir string) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
-	cfg, err = apply(cfg, filepath.Join(common, "spor", "config.json"))
+	cfg, err = apply(cfg, filepath.Join(common, "tillit", "config.json"))
 	if err != nil {
 		return Config{}, err
 	}
 	if common != gitDir {
-		cfg, err = apply(cfg, filepath.Join(gitDir, "spor", "config.json"))
+		cfg, err = apply(cfg, filepath.Join(gitDir, "tillit", "config.json"))
 		if err != nil {
 			return Config{}, err
 		}

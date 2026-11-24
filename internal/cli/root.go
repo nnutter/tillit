@@ -6,16 +6,16 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nnutter/spor/internal/cli/config"
-	clicmd "github.com/nnutter/spor/internal/cli/daemon"
-	"github.com/nnutter/spor/internal/cli/status"
+	"github.com/nnutter/tillit/internal/cli/config"
+	clicmd "github.com/nnutter/tillit/internal/cli/daemon"
+	"github.com/nnutter/tillit/internal/cli/status"
 )
 
-// New builds the spor command tree.
+// New builds the tillit command tree.
 func New(version string) *cobra.Command {
 	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, nil)))
 	root := &cobra.Command{
-		Use:     "spor",
+		Use:     "tillit",
 		Short:   "Validate and verify feature-branch commits",
 		Version: version,
 		Args:    cobra.NoArgs,

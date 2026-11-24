@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/config"
+	"github.com/nnutter/tillit/internal/config"
 )
 
 func TestShowPrintsTheMergedSettings(t *testing.T) {
@@ -28,7 +28,7 @@ func TestShowPrintsTheMergedSettings(t *testing.T) {
 	require.NoError(t, err)
 	require.JSONEq(t, `{}`, file)
 	require.Contains(t, file, "{}\n")
-	_, err = os.Stat(filepath.Join(gitDir, "spor", "config.json"))
+	_, err = os.Stat(filepath.Join(gitDir, "tillit", "config.json"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
@@ -126,9 +126,9 @@ func TestRepositoryFileIsSeparateFromTheWorktreeFile(t *testing.T) {
 	require.Equal(t, "from-worktree\n", command)
 	_, err = config.Get(gitDir, config.ScopeRepository, "auditor.validate.command")
 	require.ErrorContains(t, err, "unset")
-	_, err = os.Stat(filepath.Join(common, "spor", "config.json"))
+	_, err = os.Stat(filepath.Join(common, "tillit", "config.json"))
 	require.NoError(t, err)
-	_, err = os.Stat(filepath.Join(gitDir, "spor", "config.json"))
+	_, err = os.Stat(filepath.Join(gitDir, "tillit", "config.json"))
 	require.NoError(t, err)
 }
 
@@ -144,7 +144,7 @@ func TestEditRejectsUnknownKeysAndModes(t *testing.T) {
 	require.ErrorContains(t, err, "value")
 	err = config.Set(gitDir, config.ScopeWorktree, "auditor.validate.command", nil)
 	require.ErrorContains(t, err, "value")
-	_, err = os.Stat(filepath.Join(gitDir, "spor", "config.json"))
+	_, err = os.Stat(filepath.Join(gitDir, "tillit", "config.json"))
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 

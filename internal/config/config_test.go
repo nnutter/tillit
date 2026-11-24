@@ -7,7 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/config"
+	"github.com/nnutter/tillit/internal/config"
 )
 
 func TestLoadDefaultsToChange(t *testing.T) {
@@ -19,10 +19,10 @@ func TestLoadDefaultsToChange(t *testing.T) {
 
 func TestLoadLaterFileReplacesOnlyTheFieldsItSets(t *testing.T) {
 	gitDir := tempGitDir(t)
-	writeConfig(t, filepath.Join(os.Getenv("HOME"), ".config", "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(os.Getenv("HOME"), ".config", "tillit", "config.json"), `{
 		"auditor": {"validate": {"command": ["go", "test", "./..."], "mode": "commit"}}
 	}`)
-	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(gitDir, "tillit", "config.json"), `{
 		"auditor": {"validate": {"mode": "patch"}}
 	}`)
 
@@ -35,10 +35,10 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 	gitDir := tempGitDir(t)
 	common := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "commondir"), []byte(common+"\n"), 0o644))
-	writeConfig(t, filepath.Join(common, "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(common, "tillit", "config.json"), `{
 		"auditor": {"validate": {"command": ["from-common"], "mode": "commit"}}
 	}`)
-	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(gitDir, "tillit", "config.json"), `{
 		"auditor": {"validate": {"command": ["from-worktree"]}}
 	}`)
 
@@ -49,7 +49,7 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 
 func TestLoadRejectsLegacyVerificationSettings(t *testing.T) {
 	gitDir := tempGitDir(t)
-	path := filepath.Join(gitDir, "spor", "config.json")
+	path := filepath.Join(gitDir, "tillit", "config.json")
 	writeConfig(t, path, `{"auditor":{"verify":{"command":["true"]},"validate":{"mode":"commit"}}}`)
 	_, err := config.Load(gitDir)
 	require.ErrorContains(t, err, path)
@@ -63,7 +63,7 @@ func TestLoadRejectsLegacyVerificationSettings(t *testing.T) {
 
 func TestLoadRejectsAnUnknownMode(t *testing.T) {
 	gitDir := tempGitDir(t)
-	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(gitDir, "tillit", "config.json"), `{
 		"auditor": {"validate": {"mode": "nope"}}
 	}`)
 	_, err := config.Load(gitDir)
@@ -73,7 +73,7 @@ func TestLoadRejectsAnUnknownMode(t *testing.T) {
 
 func TestLoadReadsAuditorSettings(t *testing.T) {
 	gitDir := tempGitDir(t)
-	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(gitDir, "tillit", "config.json"), `{
 		"auditor": {"fixup": {"model": {"provider": "openai", "version": "gpt-5", "effort": "minimal"}}}
 	}`)
 
@@ -85,7 +85,7 @@ func TestLoadReadsAuditorSettings(t *testing.T) {
 
 func TestLoadRejectsAnUnknownThinking(t *testing.T) {
 	gitDir := tempGitDir(t)
-	writeConfig(t, filepath.Join(gitDir, "spor", "config.json"), `{
+	writeConfig(t, filepath.Join(gitDir, "tillit", "config.json"), `{
 		"auditor": {"fixup": {"model": {"effort": "nope"}}}
 	}`)
 	_, err := config.Load(gitDir)

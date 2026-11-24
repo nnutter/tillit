@@ -10,7 +10,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/testutil"
+	"github.com/nnutter/tillit/internal/testutil"
 )
 
 const beforeFile = `package p
@@ -36,8 +36,8 @@ func newRepo(t *testing.T) string {
 	require.NoError(t, err)
 	cfg, err := repo.Config()
 	require.NoError(t, err)
-	cfg.User.Name = "Spor Test"
-	cfg.User.Email = "spor@example.com"
+	cfg.User.Name = "Tillit Test"
+	cfg.User.Email = "tillit@example.com"
 	require.NoError(t, repo.SetConfig(cfg))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), []byte(beforeFile), 0o644))
 	worktree, err := repo.Worktree()
@@ -45,8 +45,8 @@ func newRepo(t *testing.T) string {
 	_, err = worktree.Add("main.go")
 	require.NoError(t, err)
 	_, err = worktree.Commit("init", &git.CommitOptions{Author: &object.Signature{
-		Name:  "Spor Test",
-		Email: "spor@example.com",
+		Name:  "Tillit Test",
+		Email: "tillit@example.com",
 		When:  time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 	}})
 	require.NoError(t, err)

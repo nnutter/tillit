@@ -9,8 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/testutil"
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/testutil"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
 func TestVerifyCommit(t *testing.T) {

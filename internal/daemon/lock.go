@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // ErrAlreadyRunning reports that another daemon already owns this worktree.
-var ErrAlreadyRunning = errors.New("spor daemon is already running")
+var ErrAlreadyRunning = errors.New("tillit daemon is already running")
 
-// worktreeLockPath is the lock file beside the spor worktree.
+// worktreeLockPath is the lock file beside the tillit worktree.
 // It sits outside the checkout so a force checkout cannot remove it.
 func worktreeLockPath(gitDir string) (string, error) {
 	checkout, err := repository.CheckoutDir(gitDir)

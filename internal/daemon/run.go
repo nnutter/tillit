@@ -5,12 +5,12 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
-// Run owns the spor worktree lock and polls queued requests until cancelled.
+// Run owns the tillit worktree lock and polls queued requests until cancelled.
 // Only one daemon may hold the lock for a worktree at a time.
 func Run(ctx context.Context, repoPath string) error {
 	return runReady(ctx, repoPath, nil)

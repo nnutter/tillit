@@ -12,8 +12,8 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"github.com/nnutter/spor/internal/config"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/config"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // ReportBranch reports cached validation for every commit in a branch snapshot.
@@ -54,7 +54,7 @@ func ReportBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 }
 
 func openBranchReport(ctx context.Context, gitDir string) (*sql.DB, error) {
-	path := filepath.Join(gitDir, "spor", "state.db")
+	path := filepath.Join(gitDir, "tillit", "state.db")
 	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	} else if err != nil {
@@ -108,7 +108,7 @@ func branchReportOutcome(ctx context.Context, db *sql.DB, gitDir string, commit 
 }
 
 func historicalConfig(commit *object.Commit) ([]byte, error) {
-	file, err := commit.File(".spor/config.json")
+	file, err := commit.File(".tillit/config.json")
 	if errors.Is(err, object.ErrFileNotFound) {
 		return nil, nil
 	}

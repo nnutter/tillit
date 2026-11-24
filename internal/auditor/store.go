@@ -14,7 +14,7 @@ type statedb struct {
 }
 
 func openState(ctx context.Context, gitDir string) (statedb, error) {
-	dir := filepath.Join(gitDir, "spor")
+	dir := filepath.Join(gitDir, "tillit")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return statedb{}, err
 	}

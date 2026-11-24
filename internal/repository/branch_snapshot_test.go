@@ -10,8 +10,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/testutil"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestSnapshotBranchBoundary(t *testing.T) {

@@ -18,7 +18,7 @@ type BranchSnapshot struct {
 }
 
 // SnapshotBranch selects commits reachable from the current branch tip but not
-// its boundary. start must be in the user's worktree, not Spor's checkout.
+// its boundary. start must be in the user's worktree, not Tillit's checkout.
 func SnapshotBranch(ctx context.Context, start string) (BranchSnapshot, error) {
 	var snapshot BranchSnapshot
 	ref, err := branchGit(ctx, start, "symbolic-ref", "-q", "HEAD")

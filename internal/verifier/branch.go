@@ -14,7 +14,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // BranchOutcome is one independent static verification result. A nil Result
@@ -52,7 +52,7 @@ func branch(ctx context.Context, repoPath string, verify bool) (BranchResult, er
 		return BranchResult{}, err
 	}
 	defer func() { _ = repo.Close() }()
-	db, err := openVerificationState(ctx, filepath.Join(gitDir, "spor", "state.db"), verify)
+	db, err := openVerificationState(ctx, filepath.Join(gitDir, "tillit", "state.db"), verify)
 	if err != nil {
 		return BranchResult{}, err
 	}

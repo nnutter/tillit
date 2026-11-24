@@ -16,10 +16,10 @@ import (
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/cli"
-	"github.com/nnutter/spor/internal/daemon"
-	"github.com/nnutter/spor/internal/testutil"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/cli"
+	"github.com/nnutter/tillit/internal/daemon"
+	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestStatusShowsEveryBranchCommit(t *testing.T) {
@@ -147,8 +147,8 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 	require.NoError(t, err)
 	cfg, err := repo.Config()
 	require.NoError(t, err)
-	cfg.User.Name = "Spor Test"
-	cfg.User.Email = "spor@example.com"
+	cfg.User.Name = "Tillit Test"
+	cfg.User.Email = "tillit@example.com"
 	require.NoError(t, repo.SetConfig(cfg))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), committed, 0o644))
 	worktree, err := repo.Worktree()
@@ -156,8 +156,8 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 	_, err = worktree.Add("main.go")
 	require.NoError(t, err)
 	base, err := worktree.Commit("init", &git.CommitOptions{Author: &object.Signature{
-		Name:  "Spor Test",
-		Email: "spor@example.com",
+		Name:  "Tillit Test",
+		Email: "tillit@example.com",
 		When:  time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC),
 	}})
 	require.NoError(t, err)
@@ -176,7 +176,7 @@ func writeConfig(t *testing.T, dir string, command []string, mode string) {
 	t.Helper()
 	body, err := json.Marshal(validateDocument{Auditor: auditorDocument{Validate: validateSettings{Command: command, Mode: mode}}})
 	require.NoError(t, err)
-	path := filepath.Join(dir, ".git", "spor", "config.json")
+	path := filepath.Join(dir, ".git", "tillit", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, body, 0o644))
 }

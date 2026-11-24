@@ -1,6 +1,6 @@
-# Spor
+# Tillit
 
-Spor checks the existing Git commits on a feature branch.
+Tillit checks the existing Git commits on a feature branch.
 
 ## Language
 
@@ -17,11 +17,11 @@ The Change-Id identity of a commit.
 *Avoid*: Patch, commit
 
 **Mode**:
-The identity that decides whether a commit, patch, or change has already passed Spor's operational check.
+The identity that decides whether a commit, patch, or change has already passed Tillit's operational check.
 *Avoid*: Level
 
 **Validation**:
-Spor's recorded result of running a configured operational check on a commit under a mode.
+Tillit's recorded result of running a configured operational check on a commit under a mode.
 Passing tests can provide empirical confidence that a refactor preserves behavior, but a passing check is not semantic verification.
 
 **Verification**:

@@ -10,11 +10,11 @@ import (
 
 	"charm.land/fang/v2"
 
-	"github.com/nnutter/spor/internal/cli"
-	"github.com/nnutter/spor/internal/daemon"
+	"github.com/nnutter/tillit/internal/cli"
+	"github.com/nnutter/tillit/internal/daemon"
 )
 
-// version is the spor release. Set it at build time with
+// version is the tillit release. Set it at build time with
 // -ldflags "-X main.version=vX.Y.Z".
 var version string
 
@@ -65,9 +65,9 @@ func main() {
 }
 
 func supervisorRequested() bool {
-	return os.Args[1] == "__spor_supervisor"
+	return os.Args[1] == "__tillit_supervisor"
 }
 
 func workerRequested() bool {
-	return os.Args[1] == "__spor_worker"
+	return os.Args[1] == "__tillit_worker"
 }

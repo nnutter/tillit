@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/subprocess"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/subprocess"
 )
 
 var ErrCommandNotConfigured = errors.New("validate command is not configured")

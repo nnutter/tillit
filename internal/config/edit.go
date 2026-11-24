@@ -10,7 +10,7 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // Scope chooses a config file. ScopeEffective is the merged settings.
@@ -220,16 +220,16 @@ func readDocument(path string) (document, error) {
 func decodeDocument(data []byte, path string) (document, error) {
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
-		return document{}, fmt.Errorf("read spor config %s: %w", path, err)
+		return document{}, fmt.Errorf("read tillit config %s: %w", path, err)
 	}
 	var envelope struct {
 		Auditor map[string]jsontext.Value `json:"auditor"`
 	}
 	if err := json.Unmarshal(data, &envelope); err != nil {
-		return document{}, fmt.Errorf("read spor config %s: %w", path, err)
+		return document{}, fmt.Errorf("read tillit config %s: %w", path, err)
 	}
 	if _, ok := envelope.Auditor["verify"]; ok {
-		return document{}, fmt.Errorf("read spor config %s: auditor.verify was renamed; move its settings to auditor.validate", path)
+		return document{}, fmt.Errorf("read tillit config %s: auditor.verify was renamed; move its settings to auditor.validate", path)
 	}
 	return doc, nil
 }
@@ -256,7 +256,7 @@ func scopePath(gitDir string, scope Scope) (string, error) {
 	case ScopeRepository:
 		return repositoryPath(gitDir)
 	case ScopeWorktree:
-		return filepath.Join(gitDir, "spor", "config.json"), nil
+		return filepath.Join(gitDir, "tillit", "config.json"), nil
 	default:
 		return "", fmt.Errorf("config scope %q is not global, repository, or worktree", scope)
 	}
@@ -267,7 +267,7 @@ func globalPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "spor", "config.json"), nil
+	return filepath.Join(home, ".config", "tillit", "config.json"), nil
 }
 
 func repositoryPath(gitDir string) (string, error) {
@@ -275,7 +275,7 @@ func repositoryPath(gitDir string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(common, "spor", "config.json"), nil
+	return filepath.Join(common, "tillit", "config.json"), nil
 }
 
 func assign(doc *document, kind valueKind, values []string) error {
@@ -617,7 +617,7 @@ func writeDocument(path string, doc document) error {
 		return err
 	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
-		return fmt.Errorf("write spor config %s: %w", path, err)
+		return fmt.Errorf("write tillit config %s: %w", path, err)
 	}
 	return nil
 }

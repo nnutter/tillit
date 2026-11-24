@@ -12,8 +12,8 @@ import (
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 
-	"github.com/nnutter/spor/internal/config"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/config"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // BranchOutcome describes the validation of an original branch commit.
@@ -31,7 +31,7 @@ type BranchResult struct {
 }
 
 // ValidateBranch validates a fixed branch snapshot without modifying its commits.
-// Callers must serialize it with other operations using the Spor checkout.
+// Callers must serialize it with other operations using the Tillit checkout.
 func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
 	if err != nil {

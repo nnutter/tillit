@@ -11,9 +11,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/daemon"
-	"github.com/nnutter/spor/internal/repository"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 func branchGit(t *testing.T, dir string, args ...string) string {
@@ -33,9 +33,9 @@ func branchRepo(t *testing.T) (string, string) {
 	branchGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	branchGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
 	log := filepath.Join(t.TempDir(), "calls")
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spor"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".spor", "config.json"), []byte(`{"auditor":{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}}`), 0o644))
-	branchGit(t, dir, "add", ".spor/config.json")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(`{"auditor":{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}}`), 0o644))
+	branchGit(t, dir, "add", ".tillit/config.json")
 	branchGit(t, dir, "commit", "-m", "configure validation")
 	return dir, log
 }

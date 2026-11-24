@@ -8,14 +8,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/auditor"
+	"github.com/nnutter/tillit/internal/auditor"
 )
 
 func TestStatusWaitsForTransientDatabaseWriter(t *testing.T) {
 	dir := cleanRepo(t)
 	_, err := auditor.ValidateBranch(t.Context(), dir)
 	require.NoError(t, err)
-	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, ".git", "spor", "state.db"))
+	db, err := sql.Open("sqlite", "file:"+filepath.Join(dir, ".git", "tillit", "state.db"))
 	require.NoError(t, err)
 	defer func() { _ = db.Close() }()
 	conn, err := db.Conn(t.Context())

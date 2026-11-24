@@ -9,9 +9,9 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/testutil"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
@@ -30,8 +30,8 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 	script := filepath.Join(t.TempDir(), "check")
 	data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{script}}}})
 	require.NoError(t, err)
-	writeFile(t, filepath.Join(dir, ".spor", "config.json"), string(data))
-	runGit(t, dir, "add", ".spor/config.json")
+	writeFile(t, filepath.Join(dir, ".tillit", "config.json"), string(data))
+	runGit(t, dir, "add", ".tillit/config.json")
 	runGit(t, dir, "commit", "-m", "check")
 	gitDir := strings.TrimSpace(runGit(t, dir, "rev-parse", "--absolute-git-dir"))
 	dest, err := repository.CheckoutDir(gitDir)
@@ -81,14 +81,14 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	log := filepath.Join(t.TempDir(), "log")
 	script := filepath.Join(t.TempDir(), "check")
 	writeFile(t, script, "#!/bin/sh\nprintf '%s %s %s\\n' \"$(git rev-parse HEAD)\" \"$PWD\" \"$1\" >> \""+log+"\"\n[ \"$1\" != fail ]\n")
-	configPath := filepath.Join(dir, ".spor", "config.json")
+	configPath := filepath.Join(dir, ".tillit", "config.json")
 	writeBranchConfig := func(value string) {
 		t.Helper()
 		data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 		require.NoError(t, os.WriteFile(configPath, data, 0o644))
-		runGit(t, dir, "add", ".spor/config.json")
+		runGit(t, dir, "add", ".tillit/config.json")
 	}
 	writeBranchConfig("fail")
 	runGit(t, dir, "commit", "-m", "fails")
@@ -136,14 +136,14 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	require.Equal(t, before, runGit(t, linked, "status", "--porcelain"))
 
 	// A malformed historical file must not prevent later commits from running.
-	writeFile(t, filepath.Join(linked, ".spor", "config.json"), "{")
-	runGit(t, linked, "add", ".spor/config.json")
+	writeFile(t, filepath.Join(linked, ".tillit", "config.json"), "{")
+	runGit(t, linked, "add", ".tillit/config.json")
 	runGit(t, linked, "commit", "-m", "bad config")
 	bad := strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD"))
-	runGit(t, linked, "rm", ".spor/config.json")
+	runGit(t, linked, "rm", ".tillit/config.json")
 	runGit(t, linked, "commit", "-m", "external config")
 	last := strings.TrimSpace(runGit(t, linked, "rev-parse", "HEAD"))
-	external := filepath.Join(gitDir, "spor", "config.json")
+	external := filepath.Join(gitDir, "tillit", "config.json")
 	writeExternal := func(value string) {
 		t.Helper()
 		data, marshalErr := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})

@@ -14,13 +14,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/testutil"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestDetachedDaemonLifecycle(t *testing.T) {
 	testutil.IsolateGit(t)
-	bin := filepath.Join(t.TempDir(), "spor")
+	bin := filepath.Join(t.TempDir(), "tillit")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
 	require.NoError(t, err, "%s", buildOut)
@@ -43,7 +43,7 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 	})
 	out, err := call(repo, "start")
 	require.NoError(t, err, "%s", out)
-	logPath := filepath.Join(repo, ".git", "spor", "daemon.log")
+	logPath := filepath.Join(repo, ".git", "tillit", "daemon.log")
 	require.Contains(t, out, logPath)
 	info, err := os.Stat(logPath)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func TestDetachedDaemonLifecycle(t *testing.T) {
 
 func TestStopKillStopsValidationDescendants(t *testing.T) {
 	testutil.IsolateGit(t)
-	bin := filepath.Join(t.TempDir(), "spor")
+	bin := filepath.Join(t.TempDir(), "tillit")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
 	require.NoError(t, err, "%s", buildOut)
@@ -94,7 +94,7 @@ func TestStopKillStopsValidationDescendants(t *testing.T) {
 	repo := newLifecycleRepo(t, env)
 	marker := filepath.Join(repo, "descendant.pid")
 	script := fmt.Sprintf("echo validation-output; echo $$ > %s; exec sleep 60", marker)
-	require.NoError(t, os.WriteFile(filepath.Join(repo, ".spor", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c",%q]}}}`, "/bin/sh", script)), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c",%q]}}}`, "/bin/sh", script)), 0o644))
 	cmd := exec.CommandContext(t.Context(), "git", "commit", "-am", "sleep validation")
 	cmd.Dir, cmd.Env = repo, env
 	out, err := cmd.CombinedOutput()
@@ -161,9 +161,9 @@ func newLifecycleRepo(t *testing.T, env []string) string {
 	baseCommit := git("rev-parse", "HEAD")
 	git("update-ref", "refs/remotes/origin/main", baseCommit)
 	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
-	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".spor"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".spor", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c","echo validation-output; exit 0"]}}}`, "/bin/sh")), 0o644))
-	git("add", ".spor/config.json")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c","echo validation-output; exit 0"]}}}`, "/bin/sh")), 0o644))
+	git("add", ".tillit/config.json")
 	git("commit", "-m", "configure")
 	return dir
 }

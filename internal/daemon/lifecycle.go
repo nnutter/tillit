@@ -17,9 +17,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nnutter/spor/internal/daemonlog"
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/subprocess"
+	"github.com/nnutter/tillit/internal/daemonlog"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/subprocess"
 )
 
 const (
@@ -42,7 +42,7 @@ func lifecyclePaths(repoPath string) (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
-	socket := filepath.Join(gitDir, "spor", "daemon.sock")
+	socket := filepath.Join(gitDir, "tillit", "daemon.sock")
 	if len(socket) > maxSocketPath {
 		return "", "", "", fmt.Errorf("daemon socket path is too long: %s", socket)
 	}
@@ -64,7 +64,7 @@ func Start(ctx context.Context, repoPath string) (string, error) {
 		return "", err
 	}
 	defer func() { _ = read.Close() }()
-	cmd := exec.Command(exe, "__spor_supervisor", root)
+	cmd := exec.Command(exe, "__tillit_supervisor", root)
 	cmd.Stdin = zeroReader()
 	cmd.Stdout, cmd.Stderr = zeroReader(), zeroReader()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
@@ -84,7 +84,7 @@ func Start(ctx context.Context, repoPath string) (string, error) {
 	if err := waitForReady(ctx, result, cmd, waited); err != nil {
 		return "", err
 	}
-	return filepath.Join(gitDir, "spor", "daemon.log"), nil
+	return filepath.Join(gitDir, "tillit", "daemon.log"), nil
 }
 
 func waitForReady(ctx context.Context, result <-chan string, cmd *exec.Cmd, waited <-chan error) error {
@@ -175,7 +175,7 @@ func Stop(ctx context.Context, repoPath string, kill bool) error {
 	}
 	line, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil {
-		return fmt.Errorf("daemon did not stop; retry with spor stop --kill: %w", err)
+		return fmt.Errorf("daemon did not stop; retry with tillit stop --kill: %w", err)
 	}
 	if message := strings.TrimSpace(line); message != "stopped" {
 		return fmt.Errorf("stop daemon: %s", message)
@@ -192,7 +192,7 @@ func stopOrphan(repoPath string, kill bool) error {
 		return errors.New("no supervised daemon available")
 	}
 	if !kill {
-		return errors.New("daemon supervisor is unavailable; retry with spor stop --kill")
+		return errors.New("daemon supervisor is unavailable; retry with tillit stop --kill")
 	}
 	pid, ok := verifiedWorker(root, gitDir)
 	if !ok {
@@ -227,7 +227,7 @@ func verifiedWorker(root, gitDir string) (int, bool) {
 		return 0, false
 	}
 	command := string(out)
-	if strings.Contains(command, "__spor_worker") && strings.Contains(command, root) {
+	if strings.Contains(command, "__tillit_worker") && strings.Contains(command, root) {
 		return pid, true
 	}
 	return 0, false
@@ -303,10 +303,10 @@ func Supervise(repoPath string, startup *os.File) (result error) {
 }
 
 func lockSupervisor(gitDir string) (*os.File, error) {
-	if err := os.MkdirAll(filepath.Join(gitDir, "spor"), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Join(gitDir, "tillit"), 0o700); err != nil {
 		return nil, err
 	}
-	lock, err := os.OpenFile(filepath.Join(gitDir, "spor", "supervisor.lock"), os.O_CREATE|os.O_RDWR, 0o600)
+	lock, err := os.OpenFile(filepath.Join(gitDir, "tillit", "supervisor.lock"), os.O_CREATE|os.O_RDWR, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -360,7 +360,7 @@ func superviseWorker(root string, startup *os.File, listener net.Listener, log i
 		return err
 	}
 	defer func() { _ = outputRead.Close(); _ = outputWrite.Close() }()
-	cmd := exec.Command(exe, "__spor_worker", root)
+	cmd := exec.Command(exe, "__tillit_worker", root)
 	cmd.Stdin = zeroReader()
 	cmd.Stdout, cmd.Stderr = outputWrite, outputWrite
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
@@ -416,7 +416,7 @@ type supervisorSession struct {
 
 func (s *supervisorSession) expireGraceful() {
 	if s.gracefulReq != nil {
-		s.gracefulReq.respond("daemon did not stop; retry with spor stop --kill")
+		s.gracefulReq.respond("daemon did not stop; retry with tillit stop --kill")
 	}
 	s.gracefulReq = nil
 	s.graceful = nil

@@ -10,7 +10,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/spor/internal/cli"
+	"github.com/nnutter/tillit/internal/cli"
 )
 
 func TestConfigCommandsEditTheWorktreeFile(t *testing.T) {
@@ -18,7 +18,7 @@ func TestConfigCommandsEditTheWorktreeFile(t *testing.T) {
 
 	shown := execute(t, dir, "config", "show")
 	require.Contains(t, shown, `"mode": "change"`)
-	require.NoFileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
+	require.NoFileExists(t, filepath.Join(dir, ".git", "tillit", "config.json"))
 	require.Equal(t, "change\n", execute(t, dir, "config", "get", "auditor.validate.mode"))
 	_, err := runCLI(t, dir, "config", "get", "auditor.validate.command")
 	require.ErrorContains(t, err, "unset")
@@ -27,10 +27,10 @@ func TestConfigCommandsEditTheWorktreeFile(t *testing.T) {
 	execute(t, dir, "config", "set", "auditor.validate.mode", `"patch"`)
 	require.Equal(t, "go\ntest\n-count=1\nhello world\n", execute(t, dir, "config", "get", "auditor.validate.command"))
 	require.Equal(t, "patch\n", execute(t, dir, "config", "get", "auditor.validate.mode"))
-	require.FileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
+	require.FileExists(t, filepath.Join(dir, ".git", "tillit", "config.json"))
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
-	require.NoFileExists(t, filepath.Join(home, ".config", "spor", "config.json"))
+	require.NoFileExists(t, filepath.Join(home, ".config", "tillit", "config.json"))
 
 	execute(t, dir, "config", "append", "auditor.validate.command", "-race")
 	require.Equal(t, "go\ntest\n-count=1\nhello world\n-race\n", execute(t, dir, "config", "get", "auditor.validate.command"))
@@ -47,8 +47,8 @@ func TestConfigScopeFlagsChooseTheFile(t *testing.T) {
 
 	home, err := os.UserHomeDir()
 	require.NoError(t, err)
-	require.FileExists(t, filepath.Join(home, ".config", "spor", "config.json"))
-	require.NoFileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
+	require.FileExists(t, filepath.Join(home, ".config", "tillit", "config.json"))
+	require.NoFileExists(t, filepath.Join(dir, ".git", "tillit", "config.json"))
 
 	shown := execute(t, dir, "config", "show")
 	require.Contains(t, shown, "from-global")
@@ -59,8 +59,8 @@ func TestConfigScopeFlagsChooseTheFile(t *testing.T) {
 
 	worktree := linkedWorktree(t, dir)
 	execute(t, worktree, "config", "set", "--repository", "auditor.validate.mode", `"commit"`)
-	require.FileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
-	require.NoFileExists(t, filepath.Join(worktreeGitDir(t, worktree), "spor", "config.json"))
+	require.FileExists(t, filepath.Join(dir, ".git", "tillit", "config.json"))
+	require.NoFileExists(t, filepath.Join(worktreeGitDir(t, worktree), "tillit", "config.json"))
 	require.Equal(t, "commit\n", execute(t, worktree, "config", "get", "auditor.validate.mode"))
 
 	_, err = runCLI(t, dir, "config", "show", "--global", "--repository")
@@ -72,7 +72,7 @@ func TestConfigReadsMainWorktreeRootFromSubdirectory(t *testing.T) {
 	subdir := filepath.Join(dir, "nested")
 	require.NoError(t, os.MkdirAll(subdir, 0o755))
 	execute(t, dir, "config", "set", "auditor.validate.mode", `"commit"`)
-	path := filepath.Join(dir, ".spor", "config.json")
+	path := filepath.Join(dir, ".tillit", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
 	require.NoError(t, os.WriteFile(path, []byte(`{"auditor":{"validate":{"mode":"patch"}}}`), 0o644))
 	require.Equal(t, "patch\n", execute(t, subdir, "config", "get", "auditor.validate.mode"))
@@ -90,7 +90,7 @@ func TestConfigReadsWorktreeRootWithHighestPriority(t *testing.T) {
 	execute(t, worktree, "config", "set", "auditor.validate.mode", `"patch"`)
 	execute(t, worktree, "config", "set", "auditor.fixup.model.version", `"worktree-model"`)
 
-	rootConfig := filepath.Join(worktree, ".spor", "config.json")
+	rootConfig := filepath.Join(worktree, ".tillit", "config.json")
 	require.Equal(t, "patch\n", execute(t, subdir, "config", "get", "auditor.validate.mode"))
 	require.NoError(t, os.MkdirAll(filepath.Dir(rootConfig), 0o755))
 	require.NoError(t, os.WriteFile(rootConfig, []byte(`{"auditor":{"validate":{"command":[],"mode":"change"}}}`), 0o644))
@@ -105,7 +105,7 @@ func TestConfigReadsWorktreeRootWithHighestPriority(t *testing.T) {
 	require.Equal(t, "commit\n", execute(t, worktree, "config", "get", "--repository", "auditor.validate.mode"))
 	execute(t, subdir, "config", "set", "auditor.validate.mode", `"commit"`)
 	require.Equal(t, "change\n", execute(t, subdir, "config", "get", "auditor.validate.mode"))
-	require.FileExists(t, filepath.Join(worktreeGitDir(t, worktree), "spor", "config.json"))
+	require.FileExists(t, filepath.Join(worktreeGitDir(t, worktree), "tillit", "config.json"))
 	require.NoError(t, os.WriteFile(rootConfig, []byte(`{invalid`), 0o644))
 	_, err = runCLI(t, subdir, "config", "show")
 	require.Error(t, err)
@@ -148,7 +148,7 @@ func TestConfigRejectsUnknownKeysAndModes(t *testing.T) {
 	_, err = runCLI(t, dir, "config", "set", "auditor.validate.mode", `"nope"`)
 	require.ErrorContains(t, err, "mode")
 	require.ErrorContains(t, err, "nope")
-	require.NoFileExists(t, filepath.Join(dir, ".git", "spor", "config.json"))
+	require.NoFileExists(t, filepath.Join(dir, ".git", "tillit", "config.json"))
 }
 
 func complete(t *testing.T, args ...string) string {

@@ -21,7 +21,7 @@ jobs:
           - {os: darwin, arch: arm64}
           - {os: darwin, arch: amd64}
     env:
-      BINARY: spor
+      BINARY: tillit
       TAG: ${{ github.ref_name }}
     steps:
       - name: Check out repository
@@ -43,7 +43,7 @@ jobs:
           GOARCH: ${{ matrix.platform.arch }}
         run: |
           name="${BINARY}_${TAG}_${GOOS}_${GOARCH}"
-          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${TAG}" -o "$name" ./cmd/spor
+          CGO_ENABLED=0 go build -trimpath -ldflags "-s -w -X main.version=${TAG}" -o "$name" ./cmd/tillit
           tar -czf "${name}.tar.gz" "$name"
       - name: Upload the artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

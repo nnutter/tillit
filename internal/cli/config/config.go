@@ -7,15 +7,15 @@ import (
 
 	"github.com/spf13/cobra"
 
-	sporconfig "github.com/nnutter/spor/internal/config"
-	"github.com/nnutter/spor/internal/repository"
+	tillitconfig "github.com/nnutter/tillit/internal/config"
+	"github.com/nnutter/tillit/internal/repository"
 )
 
 // New builds the config command.
 func New() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "config",
-		Short: "Read and write spor configuration",
+		Short: "Read and write tillit configuration",
 		Args:  cobra.NoArgs,
 	}
 	command.PersistentFlags().Bool("global", false, "use the user configuration file")
@@ -82,11 +82,11 @@ func newRemove() *cobra.Command {
 }
 
 func runShow(cmd *cobra.Command, _ []string) error {
-	gitDir, scope, err := prepare(cmd, sporconfig.ScopeEffective)
+	gitDir, scope, err := prepare(cmd, tillitconfig.ScopeEffective)
 	if err != nil {
 		return err
 	}
-	text, err := sporconfig.Show(gitDir, scope)
+	text, err := tillitconfig.Show(gitDir, scope)
 	if err != nil {
 		return err
 	}
@@ -94,11 +94,11 @@ func runShow(cmd *cobra.Command, _ []string) error {
 }
 
 func runGet(cmd *cobra.Command, args []string) error {
-	gitDir, scope, err := prepare(cmd, sporconfig.ScopeEffective)
+	gitDir, scope, err := prepare(cmd, tillitconfig.ScopeEffective)
 	if err != nil {
 		return err
 	}
-	text, err := sporconfig.Get(gitDir, scope, args[0])
+	text, err := tillitconfig.Get(gitDir, scope, args[0])
 	if err != nil {
 		return err
 	}
@@ -106,35 +106,35 @@ func runGet(cmd *cobra.Command, args []string) error {
 }
 
 func runSet(cmd *cobra.Command, args []string) error {
-	gitDir, scope, err := prepare(cmd, sporconfig.ScopeWorktree)
+	gitDir, scope, err := prepare(cmd, tillitconfig.ScopeWorktree)
 	if err != nil {
 		return err
 	}
-	values, err := sporconfig.ParseSetValue(args[0], args[1])
+	values, err := tillitconfig.ParseSetValue(args[0], args[1])
 	if err != nil {
 		return err
 	}
-	return sporconfig.Set(gitDir, scope, args[0], values)
+	return tillitconfig.Set(gitDir, scope, args[0], values)
 }
 
 func runAppend(cmd *cobra.Command, args []string) error {
-	gitDir, scope, err := prepare(cmd, sporconfig.ScopeWorktree)
+	gitDir, scope, err := prepare(cmd, tillitconfig.ScopeWorktree)
 	if err != nil {
 		return err
 	}
-	return sporconfig.Append(gitDir, scope, args[0], args[1])
+	return tillitconfig.Append(gitDir, scope, args[0], args[1])
 }
 
 func runRemove(cmd *cobra.Command, args []string) error {
-	gitDir, scope, err := prepare(cmd, sporconfig.ScopeWorktree)
+	gitDir, scope, err := prepare(cmd, tillitconfig.ScopeWorktree)
 	if err != nil {
 		return err
 	}
 	value, hasValue := optionalValue(args)
-	return sporconfig.Remove(gitDir, scope, args[0], value, hasValue)
+	return tillitconfig.Remove(gitDir, scope, args[0], value, hasValue)
 }
 
-func prepare(cmd *cobra.Command, fallback sporconfig.Scope) (string, sporconfig.Scope, error) {
+func prepare(cmd *cobra.Command, fallback tillitconfig.Scope) (string, tillitconfig.Scope, error) {
 	gitDir, err := gitDirOf(cmd)
 	if err != nil {
 		return "", "", err
@@ -159,7 +159,7 @@ func gitDirOf(cmd *cobra.Command) (string, error) {
 	return gitDir, nil
 }
 
-func scopeOf(cmd *cobra.Command, fallback sporconfig.Scope) (sporconfig.Scope, error) {
+func scopeOf(cmd *cobra.Command, fallback tillitconfig.Scope) (tillitconfig.Scope, error) {
 	global, err := cmd.Flags().GetBool("global")
 	if err != nil {
 		return "", err
@@ -171,21 +171,21 @@ func scopeOf(cmd *cobra.Command, fallback sporconfig.Scope) (sporconfig.Scope, e
 	return chooseScope(global, repositoryScope, fallback)
 }
 
-func chooseScope(global, repositoryScope bool, fallback sporconfig.Scope) (sporconfig.Scope, error) {
+func chooseScope(global, repositoryScope bool, fallback tillitconfig.Scope) (tillitconfig.Scope, error) {
 	if global {
 		return globalScope(repositoryScope)
 	}
 	if repositoryScope {
-		return sporconfig.ScopeRepository, nil
+		return tillitconfig.ScopeRepository, nil
 	}
 	return fallback, nil
 }
 
-func globalScope(repositoryScope bool) (sporconfig.Scope, error) {
+func globalScope(repositoryScope bool) (tillitconfig.Scope, error) {
 	if repositoryScope {
 		return "", errors.New("config scope cannot be both global and repository")
 	}
-	return sporconfig.ScopeGlobal, nil
+	return tillitconfig.ScopeGlobal, nil
 }
 
 func completeConfigKey(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
@@ -197,7 +197,7 @@ func completeConfigKey(_ *cobra.Command, args []string, toComplete string) ([]st
 
 func matchingKeys(prefix string) []string {
 	var matches []string
-	for _, key := range sporconfig.Keys() {
+	for _, key := range tillitconfig.Keys() {
 		if strings.HasPrefix(key, prefix) {
 			matches = append(matches, key)
 		}

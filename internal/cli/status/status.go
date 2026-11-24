@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/nnutter/spor/internal/auditor"
-	"github.com/nnutter/spor/internal/repository"
-	"github.com/nnutter/spor/internal/verifier"
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/repository"
+	"github.com/nnutter/tillit/internal/verifier"
 )
 
 // New builds the status command.
