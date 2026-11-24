@@ -102,6 +102,14 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 	if cached {
 		return outcome, nil
 	}
+	// Persist a transient "running" state so tillit status shows progress
+	// instead of "pending" while the command executes.
+	outcome.State = "running"
+	outcome.Error = ""
+	outcome.Evidence = nil
+	if err := recordBranchOutcome(ctx, db.DB, key, outcome); err != nil {
+		return outcome, fmt.Errorf("record running validation: %w", err)
+	}
 	if err := prepareBranchCheckout(ctx, gitDir, dest, outcome.Hash); err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
 	} else {
@@ -142,13 +150,19 @@ func recordReproductions(ctx context.Context, db statedb, gitDir, dest, key stri
 	return nil
 }
 
+func isNotError(s string) bool   { return s != "error" }
+func isNotRunning(s string) bool { return s != "running" }
+func isCachedState(s string) bool {
+	return isNotError(s) && isNotRunning(s)
+}
+
 func cachedBranchOutcome(ctx context.Context, db statedb, key string, outcome BranchOutcome) (BranchOutcome, bool, error) {
 	err := readBranchOutcome(ctx, db.DB, false, key, &outcome)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return outcome, false, err
 	}
 	if err == nil {
-		if outcome.State != "error" {
+		if isCachedState(outcome.State) {
 			return outcome, true, nil
 		}
 	}

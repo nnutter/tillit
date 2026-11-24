@@ -54,7 +54,7 @@ func run(cmd *cobra.Command, _ []string) error {
 }
 
 func makeReport(result auditor.BranchResult) report {
-	summary := map[string]int{"passed": 0, "failed": 0, "pending": 0, "error": 0}
+	summary := map[string]int{"passed": 0, "failed": 0, "pending": 0, "running": 0, "error": 0}
 	for _, commit := range result.Outcomes {
 		summary[commit.State]++
 	}
@@ -66,8 +66,8 @@ func makeReport(result auditor.BranchResult) report {
 
 func printReport(w io.Writer, report report) error {
 	var text strings.Builder
-	_, _ = fmt.Fprintf(&text, "%s: %d passed, %d failed, %d pending, %d errors\n",
-		report.Branch, report.Summary["passed"], report.Summary["failed"], report.Summary["pending"], report.Summary["error"])
+	_, _ = fmt.Fprintf(&text, "%s: %d passed, %d failed, %d pending, %d running, %d errors\n",
+		report.Branch, report.Summary["passed"], report.Summary["failed"], report.Summary["pending"], report.Summary["running"], report.Summary["error"])
 	for _, commit := range report.Commits {
 		if commit.Error != "" {
 			_, _ = fmt.Fprintf(&text, "\n%s %s: %s\n", commit.Hash, commit.Subject, commit.Error)

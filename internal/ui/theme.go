@@ -47,6 +47,7 @@ type Theme struct {
 	ValidationPassed  lipgloss.Style
 	ValidationFailed  lipgloss.Style
 	ValidationPending lipgloss.Style
+	ValidationRunning lipgloss.Style
 	ValidationError   lipgloss.Style
 
 	// Verification styles.
@@ -63,15 +64,16 @@ type Theme struct {
 	TableCursor   lipgloss.Style
 
 	// Semantic symbols.
-	SymPassed      string
-	SymFailed      string
-	SymPending     string
-	SymError       string
-	SymVerified    string
-	SymRejected    string
-	SymUnsupported string
-	SymRunning     string
-	SymStopped     string
+	SymPassed            string
+	SymFailed            string
+	SymPending           string
+	SymRunningValidation string
+	SymError             string
+	SymVerified          string
+	SymRejected          string
+	SymUnsupported       string
+	SymRunning           string
+	SymStopped           string
 }
 
 // New creates a theme.
@@ -84,15 +86,16 @@ func New(colorEnabled, hasDark bool) Theme {
 		ColorEnabled: colorEnabled,
 		HasDark:      hasDark,
 
-		SymPassed:      "✓",
-		SymFailed:      "✗",
-		SymPending:     "○",
-		SymError:       "⚠",
-		SymVerified:    "✓",
-		SymRejected:    "✗",
-		SymUnsupported: "○",
-		SymRunning:     "●",
-		SymStopped:     "○",
+		SymPassed:            "✓",
+		SymFailed:            "✗",
+		SymPending:           "○",
+		SymRunningValidation: "◐",
+		SymError:             "⚠",
+		SymVerified:          "✓",
+		SymRejected:          "✗",
+		SymUnsupported:       "○",
+		SymRunning:           "●",
+		SymStopped:           "○",
 	}
 
 	if !colorEnabled {
@@ -111,6 +114,7 @@ func New(colorEnabled, hasDark bool) Theme {
 		t.ValidationPassed = lipgloss.NewStyle()
 		t.ValidationFailed = lipgloss.NewStyle()
 		t.ValidationPending = lipgloss.NewStyle()
+		t.ValidationRunning = lipgloss.NewStyle()
 		t.ValidationError = lipgloss.NewStyle()
 		t.VerificationVerified = lipgloss.NewStyle()
 		t.VerificationRejected = lipgloss.NewStyle()
@@ -184,6 +188,9 @@ func New(colorEnabled, hasDark bool) Theme {
 		Foreground(cDanger)
 	t.ValidationPending = lipgloss.NewStyle().
 		Foreground(cWarning)
+	t.ValidationRunning = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(cInfo)
 	t.ValidationError = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(cError)
@@ -283,6 +290,8 @@ func (t Theme) ValidationIcon(state string) string {
 		return t.SymFailed
 	case "error":
 		return t.SymError
+	case "running":
+		return t.SymRunningValidation
 	case "pending":
 		fallthrough
 	default:
@@ -299,6 +308,8 @@ func (t Theme) ValidationStyle(state string) lipgloss.Style {
 		return t.ValidationFailed
 	case "error":
 		return t.ValidationError
+	case "running":
+		return t.ValidationRunning
 	case "pending":
 		fallthrough
 	default:

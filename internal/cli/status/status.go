@@ -55,6 +55,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
+	normalizeValidationRunning(&branch, running)
 	verification, err := branchVerification(cmd, repo, branch.Snapshot)
 	if err != nil {
 		return err
@@ -156,4 +157,19 @@ func sameSnapshot(a, b commitstack.Snapshot) bool {
 		return false
 	}
 	return slices.EqualFunc(a.Stacks, b.Stacks, commitstack.SameStack)
+}
+
+// normalizeValidationRunning maps a stale "running" row to "pending" when
+// the daemon is not active. The daemon persists "running" while a validation
+// command executes; if it later stops before finishing (crash, SIGTERM), the
+// row would otherwise stay "running" forever.
+func normalizeValidationRunning(branch *auditor.BranchResult, daemonRunning bool) {
+	if daemonRunning {
+		return
+	}
+	for i := range branch.Outcomes {
+		if branch.Outcomes[i].State == "running" {
+			branch.Outcomes[i].State = "pending"
+		}
+	}
 }
