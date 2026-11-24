@@ -5,22 +5,12 @@ import (
 	"fmt"
 )
 
-// ParseSetValue reads the JSON text for one config set value.
-// A list key requires a JSON array of strings.
-// A scalar key requires a JSON string.
+// ParseSetValue reads a JSON array of command arguments.
 func ParseSetValue(key, text string) ([]string, error) {
-	kind, err := kindOf(key)
-	if err != nil {
+	if err := checkKey(key); err != nil {
 		return nil, err
 	}
-	switch kind {
-	case kindCommand:
-		return parseJSONList(key, text)
-	case kindMode, kindFixupProvider, kindFixupVersion, kindFixupEffort:
-		return parseJSONScalar(key, text)
-	default:
-		return nil, fmt.Errorf("unknown config key %q", key)
-	}
+	return parseJSONList(key, text)
 }
 
 func parseJSONList(key, text string) ([]string, error) {
@@ -32,12 +22,4 @@ func parseJSONList(key, text string) ([]string, error) {
 		return nil, fmt.Errorf("config key %q needs a JSON array of strings", key)
 	}
 	return values, nil
-}
-
-func parseJSONScalar(key, text string) ([]string, error) {
-	var value string
-	if err := json.Unmarshal([]byte(text), &value); err != nil {
-		return nil, fmt.Errorf("config key %q needs a JSON string: %w", key, err)
-	}
-	return []string{value}, nil
 }

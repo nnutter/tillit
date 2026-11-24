@@ -8,20 +8,8 @@ Tillit checks the existing Git commits on a feature branch.
 A Git commit on the feature branch, identified by its commit hash.
 *Avoid*: Revision
 
-**Patch**:
-The stable identity of a commit's diff.
-*Avoid*: Diff
-
-**Change**:
-The Change-Id identity of a commit.
-*Avoid*: Patch, commit
-
-**Mode**:
-The identity that decides whether a commit, patch, or change has already passed Tillit's operational check.
-*Avoid*: Level
-
 **Validation**:
-Tillit's recorded result of running a configured operational check on a commit under a mode.
+Tillit's recorded result of running a configured operational check on a commit.
 Passing tests can provide empirical confidence that a refactor preserves behavior, but a passing check is not semantic verification.
 
 **Verification**:
