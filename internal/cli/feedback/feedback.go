@@ -88,6 +88,9 @@ func printEvidence(w *strings.Builder, evidence *auditor.Evidence) {
 	for _, failure := range evidence.Failures {
 		_, _ = fmt.Fprintln(w, " ", failure.Kind, failure.Package, failure.Test)
 		_, _ = fmt.Fprintln(w, strings.TrimRight(failure.Output, "\n"))
+		for _, run := range failure.Reproductions {
+			_, _ = fmt.Fprintf(w, "    Rerun (%s): %q\n", run.State, run.Command)
+		}
 	}
 	if evidence.OutputTruncated {
 		_, _ = fmt.Fprintln(w, "  Output truncated")

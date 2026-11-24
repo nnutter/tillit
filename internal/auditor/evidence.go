@@ -17,10 +17,11 @@ type Evidence struct {
 
 // Failure identifies the smallest failing unit reported by the validation command.
 type Failure struct {
-	Kind    string `json:"kind"`
-	Package string `json:"package,omitempty"`
-	Test    string `json:"test,omitempty"`
-	Output  string `json:"output"`
+	Kind          string         `json:"kind"`
+	Package       string         `json:"package,omitempty"`
+	Test          string         `json:"test,omitempty"`
+	Output        string         `json:"output"`
+	Reproductions []Reproduction `json:"reproductions,omitempty"`
 }
 
 func evidenceCommand(command []string) ([]string, bool) {

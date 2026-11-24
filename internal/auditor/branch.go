@@ -107,12 +107,36 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 	if ctx.Err() != nil {
 		return outcome, ctx.Err()
 	}
-	err = recordBranchOutcome(ctx, db.DB, key, outcome)
-	if err != nil {
+	return finishBranchValidation(ctx, db, gitDir, dest, key, outcome)
+}
+
+func finishBranchValidation(ctx context.Context, db statedb, gitDir, dest, key string, outcome BranchOutcome) (BranchOutcome, error) {
+	if err := recordBranchOutcome(ctx, db.DB, key, outcome); err != nil {
 		return outcome, fmt.Errorf("record branch validation: %w", err)
+	}
+	if outcome.State == "failed" {
+		if err := recordReproductions(ctx, db, gitDir, dest, key, outcome); err != nil {
+			return outcome, err
+		}
 	}
 	outcome.Evidence = nil
 	return outcome, nil
+}
+
+func recordReproductions(ctx context.Context, db statedb, gitDir, dest, key string, outcome BranchOutcome) error {
+	if outcome.Evidence == nil {
+		return nil
+	}
+	if !collectReproductions(ctx, gitDir, dest, outcome.Hash, outcome.Evidence) {
+		return nil
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if err := recordBranchOutcome(ctx, db.DB, key, outcome); err != nil {
+		return fmt.Errorf("record isolated reproductions: %w", err)
+	}
+	return nil
 }
 
 func cachedBranchOutcome(ctx context.Context, db statedb, key string, outcome BranchOutcome) (BranchOutcome, bool, error) {

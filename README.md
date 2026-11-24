@@ -26,6 +26,9 @@ The daemon retries infrastructure errors.
 `feedback` reports cached failures and command output without rerunning checks.
 Direct `go test` commands report individual test, subtest, and build failures using Go's JSON events.
 Other commands report their failures at the command level.
+For supported Go test arguments, the daemon reruns failing tests with an anchored `-run` pattern in one package and records the command, output, and outcome.
+If the isolated run passes, Tillit may rerun the original test selection in just that package.
+Reruns are bounded and never change the original validation result.
 
 Set shared configuration with `tillit config set --global` or `tillit config set --repository`.
 Without a scope flag, changes go to the current worktree's Git directory.
