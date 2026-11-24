@@ -15,6 +15,8 @@ import (
 	"github.com/nnutter/spor/internal/subprocess"
 )
 
+var ErrCommandNotConfigured = errors.New("validate command is not configured")
+
 func checkout(ctx context.Context, gitDir, hash string) error {
 	dest, err := repository.CheckoutDir(gitDir)
 	if err != nil {
@@ -89,16 +91,6 @@ func runGit(ctx context.Context, dir string, args ...string) error {
 
 func gitOutput(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := gitCommand(ctx, dir, args...)
-	out, err := cmd.Output()
-	if err != nil {
-		return "", gitError(args, err)
-	}
-	return string(out), nil
-}
-
-func gitInput(ctx context.Context, dir, input string, args ...string) (string, error) {
-	cmd := gitCommand(ctx, dir, args...)
-	cmd.Stdin = strings.NewReader(input)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", gitError(args, err)

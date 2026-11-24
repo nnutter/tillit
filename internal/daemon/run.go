@@ -47,9 +47,6 @@ func poll(ctx context.Context, repoPath string) error {
 		case <-ctx.Done():
 			return nil
 		case <-timer.C:
-			// A failed request is already marked done; the daemon
-			// keeps polling so the next request still gets served.
-			_, _ = ProcessPending(ctx, repoPath)
 		}
 	}
 }

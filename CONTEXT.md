@@ -1,11 +1,11 @@
 # Spor
 
-Spor is the set of refactor commits taken from staged changes, together with the record of whether they passed Spor's operational checks.
+Spor checks the existing Git commits on a feature branch.
 
 ## Language
 
 **Commit**:
-A spor commit, identified on its own.
+A Git commit on the feature branch, identified by its commit hash.
 *Avoid*: Revision
 
 **Patch**:

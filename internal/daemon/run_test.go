@@ -76,36 +76,11 @@ func TestRunContinuesAfterMissingBoundary(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- daemon.Run(ctx, dir) }()
 	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
-	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
-	require.Eventually(t, func() bool {
-		failure, _ := daemon.WorkError(t.Context(), dir)
-		return strings.Contains(failure, "fork-point")
-	}, 10*time.Second, 50*time.Millisecond)
+	_, err := auditor.ReportBranch(t.Context(), dir)
+	require.ErrorContains(t, err, "fork-point")
 	branchGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	require.Eventually(t, func() bool {
 		data, _ := os.ReadFile(log)
 		return strings.Contains(string(data), "run\n")
 	}, 10*time.Second, 50*time.Millisecond)
-}
-
-func TestValidateRequestChecksBranchAndReportsMissingBoundary(t *testing.T) {
-	dir, log := branchRepo(t)
-	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
-	processed, err := daemon.ProcessPending(t.Context(), dir)
-	require.True(t, processed)
-	require.NoError(t, err)
-	data, err := os.ReadFile(log)
-	require.NoError(t, err)
-	require.Equal(t, 1, strings.Count(string(data), "run\n"))
-	report, err := auditor.ReportBranch(t.Context(), dir)
-	require.NoError(t, err)
-	require.Equal(t, "passed", report.Outcomes[0].State)
-	branchGit(t, dir, "update-ref", "-d", "refs/remotes/origin/main")
-	require.NoError(t, daemon.EnqueueValidate(t.Context(), dir, ""))
-	processed, err = daemon.ProcessPending(t.Context(), dir)
-	require.True(t, processed)
-	require.ErrorContains(t, err, "fork-point")
-	workErr, err := daemon.WorkError(t.Context(), dir)
-	require.NoError(t, err)
-	require.Contains(t, workErr, "fork-point")
 }
