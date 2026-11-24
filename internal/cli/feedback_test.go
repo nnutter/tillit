@@ -23,6 +23,9 @@ func TestFeedbackReportsGoFailureWithoutRunningChecks(t *testing.T) {
 	require.Contains(t, pending, `"validation":"pending"`)
 	_, err := auditor.ValidateBranch(t.Context(), dir)
 	require.NoError(t, err)
+	info, err := os.Stat(filepath.Join(dir, ".git", "tillit", "state.db"))
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o600), info.Mode().Perm())
 
 	// Feedback must not invoke the toolchain again, even if it's available.
 	t.Setenv("GOFLAGS", "-unrecognized-test-option")

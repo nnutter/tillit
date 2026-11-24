@@ -21,7 +21,11 @@ func openState(ctx context.Context, gitDir string) (statedb, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return statedb{}, err
 	}
-	u := url.URL{Scheme: "file", Path: filepath.Join(dir, "state.db"), RawQuery: "_pragma=busy_timeout(5000)"}
+	path := filepath.Join(dir, "state.db")
+	if err := privateStateFile(path); err != nil {
+		return statedb{}, err
+	}
+	u := url.URL{Scheme: "file", Path: path, RawQuery: "_pragma=busy_timeout(5000)"}
 	db, err := sql.Open("sqlite", u.String())
 	if err != nil {
 		return statedb{}, err
@@ -31,6 +35,24 @@ func openState(ctx context.Context, gitDir string) (statedb, error) {
 		return statedb{}, err
 	}
 	return statedb{DB: db}, nil
+}
+
+// Validation output can contain secrets. Restrict existing Tillit databases
+// as well as newly created ones before writing evidence.
+func privateStateFile(path string) error {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = file.Close() }()
+	info, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	if info.Mode().Perm() == 0o600 {
+		return nil
+	}
+	return file.Chmod(0o600)
 }
 
 func ensureBranchValidation(ctx context.Context, db *sql.DB) error {
