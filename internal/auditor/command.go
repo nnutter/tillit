@@ -56,7 +56,7 @@ func addWorktree(ctx context.Context, gitDir, dest, hash string) error {
 	return runGit(ctx, common, "--git-dir", common, "worktree", "add", "--detach", dest, hash)
 }
 
-func runCommand(ctx context.Context, gitDir string, command []string) (bool, commandOutput, error) {
+func runCommand(ctx context.Context, gitDir string, command []string, collectGoEvents bool) (bool, commandOutput, error) {
 	if len(command) == 0 {
 		return false, commandOutput{}, ErrCommandNotConfigured
 	}
@@ -68,14 +68,22 @@ func runCommand(ctx context.Context, gitDir string, command []string) (bool, com
 	cmd.Dir = dest
 	cmd.Env = commandEnv()
 	var capture outputCapture
-	stream := io.MultiWriter(&capture, os.Stderr)
+	var events goEvents
+	var stream io.Writer = io.MultiWriter(&capture, os.Stderr)
+	if collectGoEvents {
+		stream = io.MultiWriter(stream, &events)
+	}
 	cmd.Stdout, cmd.Stderr = stream, stream
 	hash, _ := gitOutput(ctx, dest, "rev-parse", "HEAD")
 	started := time.Now()
 	slog.InfoContext(ctx, "Starting validation", "commit", strings.TrimSpace(hash))
 	err = cmd.Run()
 	slog.InfoContext(ctx, "Validation finished", "commit", strings.TrimSpace(hash), "passed", err == nil, "duration", time.Since(started))
-	return commandResult(ctx, capture.result(), err)
+	output := capture.result()
+	if collectGoEvents {
+		output.Failures = events.result()
+	}
+	return commandResult(ctx, output, err)
 }
 
 func commandResult(ctx context.Context, output commandOutput, err error) (bool, commandOutput, error) {
@@ -94,8 +102,9 @@ func commandResult(ctx context.Context, output commandOutput, err error) (bool, 
 const outputLimit = 1 << 20
 
 type commandOutput struct {
-	Text      string `json:"output"`
-	Truncated bool   `json:"output_truncated"`
+	Text      string
+	Truncated bool
+	Failures  []Failure
 }
 
 type outputCapture struct {

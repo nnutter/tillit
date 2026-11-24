@@ -11,11 +11,13 @@ import (
 
 // Reproduction records an isolated rerun without changing the validation outcome.
 type Reproduction struct {
-	Command         []string `json:"command"`
-	State           string   `json:"state"`
-	Output          string   `json:"output"`
-	OutputTruncated bool     `json:"output_truncated"`
-	Error           string   `json:"error,omitempty"`
+	Command             []string `json:"command"`
+	State               string   `json:"state"`
+	Output              string   `json:"output"`
+	OutputTruncated     bool     `json:"output_truncated"`
+	TestOutput          string   `json:"test_output,omitempty"`
+	TestOutputTruncated bool     `json:"test_output_truncated,omitzero"`
+	Error               string   `json:"error,omitempty"`
 }
 
 const (
@@ -84,17 +86,16 @@ func (r *reproducer) run(ctx context.Context, failure Failure, pattern string) R
 	if err := prepareBranchCheckout(ctx, r.gitDir, r.dest, r.hash); err != nil {
 		return reproductionError(result, err)
 	}
-	passed, output, err := runCommand(ctx, r.gitDir, args)
+	passed, output, err := runCommand(ctx, r.gitDir, args, true)
 	result.Output, result.OutputTruncated = output.Text, output.Truncated
 	if err != nil {
 		return reproductionError(result, err)
 	}
 	if passed {
 		result.State = "passed"
-	} else {
-		result.State = reproductionFailure(failure, output.Text)
+		return result
 	}
-	return result
+	return reproduceResult(failure, output.Failures, result)
 }
 
 func reproductionError(result Reproduction, err error) Reproduction {
@@ -102,16 +103,19 @@ func reproductionError(result Reproduction, err error) Reproduction {
 	return result
 }
 
-func reproductionFailure(target Failure, output string) string {
-	for _, failure := range goFailures(output) {
+func reproduceResult(target Failure, failures []Failure, result Reproduction) Reproduction {
+	for _, failure := range failures {
 		if failure.Package != target.Package {
 			continue
 		}
 		if failure.Test == target.Test {
-			return "reproduced"
+			result.State = "reproduced"
+			result.TestOutput, result.TestOutputTruncated = failure.Output, failure.OutputTruncated
+			return result
 		}
 	}
-	return "other_failure"
+	result.State = "other_failure"
+	return result
 }
 
 func validPackage(path string) bool {

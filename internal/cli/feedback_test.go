@@ -43,6 +43,8 @@ func TestFeedbackReportsGoFailureWithoutRunningChecks(t *testing.T) {
 	require.Equal(t, head, commit.Hash)
 	require.Equal(t, "failed", commit.State)
 	require.NotNil(t, commit.Evidence)
+	require.True(t, commit.Evidence.OutputTruncated)
+	require.NotContains(t, commit.Evidence.Output, "intentional failure")
 	require.Equal(t, []string{"go", "test", "-json", "-short", "-run", "TestExample|TestOrderDependent", "./..."}, commit.Evidence.Command)
 	require.Len(t, commit.Evidence.Failures, 3)
 	testFailures := checkBuildFailure(t, commit.Evidence.Failures)
@@ -90,17 +92,24 @@ func checkOrderDependentFailure(t *testing.T, failure auditor.Failure) {
 	broader := failure.Reproductions[1]
 	require.Equal(t, "reproduced", broader.State, "%s", broader.Output)
 	require.Contains(t, broader.Command, "TestExample|TestOrderDependent")
-	require.Contains(t, broader.Output, "earlier test changed the result")
+	require.Contains(t, broader.TestOutput, "earlier test changed the result")
 }
 
 func commitFailingGoTest(t *testing.T, dir string) string {
 	t.Helper()
 	const source = `package p
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 var earlierTestRan bool
 func TestExample(t *testing.T) {
 	earlierTestRan = true
-	t.Run("passing", func(t *testing.T) { t.Log("passing sibling") })
+	t.Run("passing", func(t *testing.T) {
+		for range 300 {
+			t.Log("passing sibling", strings.Repeat("x", 4096))
+		}
+	})
 	t.Run("fail+[case]", func(t *testing.T) { t.Error("intentional failure") })
 }
 func TestOrderDependent(t *testing.T) {

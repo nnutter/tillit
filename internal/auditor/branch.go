@@ -164,7 +164,7 @@ func branchConfigKey(cfg config.Config) (string, error) {
 
 func runBranchCommand(ctx context.Context, gitDir string, command []string, outcome BranchOutcome) BranchOutcome {
 	args, goJSON := evidenceCommand(command)
-	passed, output, err := runCommand(ctx, gitDir, args)
+	passed, output, err := runCommand(ctx, gitDir, args, goJSON)
 	outcome.Evidence = new(Evidence{
 		Command: args, Output: output.Text, OutputTruncated: output.Truncated,
 		Failures: []Failure{},
@@ -174,7 +174,7 @@ func runBranchCommand(ctx context.Context, gitDir string, command []string, outc
 		outcome.State, outcome.Error = "error", err.Error()
 	} else if !passed {
 		outcome.State, outcome.Error = "failed", "validation command failed"
-		outcome.Evidence.Failures = evidenceFailures(goJSON, output.Text)
+		outcome.Evidence.Failures = evidenceFailures(output)
 	}
 	return outcome
 }
