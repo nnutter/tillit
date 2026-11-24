@@ -91,17 +91,16 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 	if err != nil {
 		return outcome, err
 	}
+	outcome, cached, err := cachedBranchOutcome(ctx, db, key, outcome)
+	if err != nil {
+		return outcome, err
+	}
+	if cached {
+		return outcome, nil
+	}
 	if err := prepareBranchCheckout(ctx, gitDir, dest, outcome.Hash); err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
 	} else {
-		var cached bool
-		outcome, cached, err = cachedBranchOutcome(ctx, db, key, outcome)
-		if err != nil {
-			return outcome, err
-		}
-		if cached {
-			return outcome, nil
-		}
 		outcome = runBranchCommand(ctx, gitDir, cfg.Command, outcome)
 	}
 	if ctx.Err() != nil {
