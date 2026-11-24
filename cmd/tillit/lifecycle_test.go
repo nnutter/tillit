@@ -106,7 +106,7 @@ func checkForeground(t *testing.T, bin, repo string, env []string, interrupt boo
 	result := make(chan error, 1)
 	go func() { result <- cmd.Wait() }()
 	status := func() string {
-		check := exec.CommandContext(t.Context(), bin, "--repo", repo, "status")
+		check := exec.CommandContext(t.Context(), bin, "--repo", repo, "status", "--no-start")
 		check.Env = env
 		out, _ := check.CombinedOutput()
 		return string(out)

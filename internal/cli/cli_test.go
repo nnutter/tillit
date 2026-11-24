@@ -39,7 +39,7 @@ func TestStatusShowsEveryBranchCommit(t *testing.T) {
 	require.NoError(t, err)
 	second, err := wt.Commit("later pending", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
 	require.NoError(t, err)
-	out := execute(t, dir, "status")
+	out := execute(t, dir, "status", "--no-start")
 	require.Contains(t, out, first.String()+" first failure failed")
 	require.Contains(t, out, second.String()+" later pending pending")
 }
@@ -67,7 +67,7 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 			require.NoError(t, err)
 			mixed, err := wt.Commit("other change", &git.CommitOptions{Author: sig})
 			require.NoError(t, err)
-			before := execute(t, dir, "status")
+			before := execute(t, dir, "status", "--no-start")
 			require.Contains(t, before, rename.String()+" rename")
 			require.Contains(t, before, "verification: pending")
 			ctx, cancel := context.WithCancel(t.Context())
@@ -77,7 +77,7 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 			var out string
 			ok := false
 			for range 100 {
-				out, err = runCLI(t, dir, "status")
+				out, err = runCLI(t, dir, "status", "--no-start")
 				if err == nil && strings.Contains(out, "verification: verified") && strings.Contains(out, "verification: unsupported: commit must modify exactly one file") {
 					ok = true
 					break
@@ -85,11 +85,11 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 				time.Sleep(100 * time.Millisecond)
 			}
 			require.True(t, ok, "status: %s; error: %v", out, err)
-			out = execute(t, dir, "status")
+			out = execute(t, dir, "status", "--no-start")
 			require.Contains(t, out, mixed.String()+" other change")
 			if configured {
 				require.Eventually(t, func() bool {
-					out = execute(t, dir, "status")
+					out = execute(t, dir, "status", "--no-start")
 					return strings.Contains(out, rename.String()+" rename failed")
 				}, 10*time.Second, 100*time.Millisecond, "status: %s", out)
 			} else {

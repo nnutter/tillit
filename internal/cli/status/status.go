@@ -1,10 +1,12 @@
 package status
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"slices"
+	"strings"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -32,6 +34,8 @@ The design language is centralized in internal/ui/theme.go and uses
 semantic colors for every state (passed/failed/pending/running/error, verified/rejected/unsupported).
 The TUI auto-refreshes every 250ms (configurable with --interval) so that
 validation states transition pending → running → passed/failed without restart.
+Status starts the daemon automatically if it is not already running;
+use --no-start to disable auto-start.
 `,
 		Args: cobra.NoArgs,
 		RunE: run,
@@ -39,6 +43,7 @@ validation states transition pending → running → passed/failed without resta
 	cmd.Flags().Bool("interactive", false, "force interactive TUI")
 	cmd.Flags().Bool("simple", false, "render plain text without TUI or colors")
 	cmd.Flags().Duration("interval", 250*time.Millisecond, "refresh interval for interactive TUI")
+	cmd.Flags().Bool("no-start", false, "do not start the daemon if it is not already running")
 	return cmd
 }
 
@@ -50,20 +55,15 @@ func run(cmd *cobra.Command, _ []string) error {
 	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
 	simpleFlag, _ := cmd.Flags().GetBool("simple")
 	interval, _ := cmd.Flags().GetDuration("interval")
+	noStart, _ := cmd.Flags().GetBool("no-start")
 
-	running, err := daemon.Running(repo)
-	if err != nil {
-		return fmt.Errorf("report daemon: %w", err)
-	}
-
-	branch, err := auditor.ReportBranch(cmd.Context(), repo)
+	running, branch, verification, err := collectStatus(cmd, repo)
 	if err != nil {
 		return err
 	}
-	normalizeValidationRunning(&branch, running)
-	verification, err := branchVerification(cmd, repo, branch.Snapshot)
-	if err != nil {
-		return err
+
+	if shouldAutoStart(running, noStart) {
+		running = ensureDaemon(cmd, repo)
 	}
 
 	// Determine output mode.
@@ -99,6 +99,50 @@ func run(cmd *cobra.Command, _ []string) error {
 
 func shouldUseInteractive(a, b bool) bool { return isTruthy(a) || isTruthy(b) }
 func isTruthy(b bool) bool                { return b }
+func isNotRunning(b bool) bool            { return !b }
+func isNotNoStart(b bool) bool            { return !b }
+func shouldAutoStart(running, noStart bool) bool {
+	return isNotRunning(running) && isNotNoStart(noStart)
+}
+
+func collectStatus(cmd *cobra.Command, repo string) (bool, auditor.BranchResult, verifier.BranchResult, error) {
+	running, err := daemon.Running(repo)
+	if err != nil {
+		return false, auditor.BranchResult{}, verifier.BranchResult{}, fmt.Errorf("report daemon: %w", err)
+	}
+	branch, err := auditor.ReportBranch(cmd.Context(), repo)
+	if err != nil {
+		return running, auditor.BranchResult{}, verifier.BranchResult{}, err
+	}
+	normalizeValidationRunning(&branch, running)
+	verification, err := branchVerification(cmd, repo, branch.Snapshot)
+	if err != nil {
+		return running, branch, verifier.BranchResult{}, err
+	}
+	return running, branch, verification, nil
+}
+
+// ensureDaemon starts the supervised daemon if it is not already running.
+// It returns the new running state for display. "already running" races are
+// treated as success; other failures are logged to stderr and the caller
+// continues to render a status snapshot.
+func ensureDaemon(cmd *cobra.Command, repo string) bool {
+	if _, err := daemon.Start(cmd.Context(), repo); err != nil {
+		if errors.Is(err, daemon.ErrAlreadyRunning) || strings.Contains(err.Error(), "already running") {
+			if updated, checkErr := daemon.Running(repo); checkErr == nil {
+				return updated
+			}
+			return true
+		}
+		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "tillit status: start daemon: %v\n", err)
+		// Re-check: start may have partially succeeded.
+		if updated, checkErr := daemon.Running(repo); checkErr == nil {
+			return updated
+		}
+		return false
+	}
+	return true
+}
 
 func isTerminal(w io.Writer) bool {
 	if f, ok := w.(*os.File); ok {

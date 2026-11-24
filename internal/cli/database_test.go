@@ -25,7 +25,7 @@ func TestStatusWaitsForTransientDatabaseWriter(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _, _ = conn.ExecContext(t.Context(), "ROLLBACK") }()
 	done := make(chan error, 1)
-	go func() { _, err := runCLI(t, dir, "status"); done <- err }()
+	go func() { _, err := runCLI(t, dir, "status", "--no-start"); done <- err }()
 	select {
 	case err := <-done:
 		require.FailNow(t, "status returned before the write lock was released", "error: %v", err)
