@@ -1,8 +1,10 @@
 package status
 
 import (
+	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -11,6 +13,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
 	"github.com/nnutter/tillit/internal/ui"
 	"github.com/nnutter/tillit/internal/verifier"
 )
@@ -81,11 +84,18 @@ func defaultKeyMap() KeyMap {
 }
 
 // model is the Bubble Tea model for `tillit status`.
+// It periodically refreshes from the daemon so that pending/running states
+// transition to passed/failed without manual restart.
 type model struct {
 	theme         ui.Theme
 	branch        auditor.BranchResult
 	verification  verifier.BranchResult
 	daemonRunning bool
+
+	repo      string
+	interval  time.Duration
+	lastFetch time.Time
+	fetchErr  error
 
 	width  int
 	height int
@@ -95,13 +105,32 @@ type model struct {
 	keys  KeyMap
 }
 
+type refreshMsg struct {
+	branch        auditor.BranchResult
+	verification  verifier.BranchResult
+	daemonRunning bool
+	fetchErr      error
+	at            time.Time
+}
+
 // NewModel creates a status model.
 func NewModel(branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) model {
+	return NewModelWithRepo(branch, verification, daemonRunning, theme, "", 250*time.Millisecond)
+}
+
+// NewModelWithRepo creates a status model with periodic refresh.
+func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme, repo string, interval time.Duration) model {
+	if interval <= 0 {
+		interval = 250 * time.Millisecond
+	}
 	m := model{
 		theme:         theme,
 		branch:        branch,
 		verification:  verification,
 		daemonRunning: daemonRunning,
+		repo:          repo,
+		interval:      interval,
+		lastFetch:     time.Now(),
 		keys:          defaultKeyMap(),
 	}
 
@@ -120,6 +149,31 @@ func NewModel(branch auditor.BranchResult, verification verifier.BranchResult, d
 	m.help = help.New()
 	m.help.SetWidth(80)
 	return m
+}
+
+func fetchStatusMsg(ctx context.Context, repo string, at time.Time) refreshMsg {
+	running, err := daemon.Running(repo)
+	if err != nil {
+		return refreshMsg{fetchErr: fmt.Errorf("report daemon: %w", err), at: at}
+	}
+	branch, err := auditor.ReportBranch(ctx, repo)
+	if err != nil {
+		return refreshMsg{fetchErr: err, at: at}
+	}
+	normalizeValidationRunning(&branch, running)
+	verification, err := verifier.ReportBranch(ctx, repo)
+	if err != nil {
+		return refreshMsg{fetchErr: fmt.Errorf("report verification: %w", err), at: at}
+	}
+	if !sameSnapshot(branch.Snapshot, verification.Snapshot) {
+		return refreshMsg{fetchErr: fmt.Errorf("branch changed while collecting status; retry"), at: at}
+	}
+	return refreshMsg{
+		branch:        branch,
+		verification:  verification,
+		daemonRunning: running,
+		at:            at,
+	}
 }
 
 func tableStyles(theme ui.Theme) table.Styles {
@@ -197,11 +251,26 @@ func truncateSubject(s string, max int) string {
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	if m.repo == "" {
+		return nil
+	}
+	return m.refreshCmd()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case refreshMsg:
+		m.lastFetch = msg.at
+		m.fetchErr = msg.fetchErr
+		if msg.fetchErr == nil {
+			m.branch = msg.branch
+			m.verification = msg.verification
+			m.daemonRunning = msg.daemonRunning
+			m.rebuildTableLocked()
+		}
+		// Schedule next periodic refresh.
+		return m, m.refreshCmd()
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -272,7 +341,18 @@ func (m model) View() tea.View {
 		"   ",
 		summary,
 	))
-	b.WriteString("\n\n")
+	b.WriteString("\n")
+
+	// Refresh indicator - shows periodic polling is active.
+	if m.repo != "" {
+		refreshLine := fmt.Sprintf("auto-refresh %s • last updated %s", m.interval, m.lastFetch.Format("15:04:05"))
+		if m.fetchErr != nil {
+			refreshLine += fmt.Sprintf(" • %v", m.fetchErr)
+		}
+		b.WriteString(m.theme.Subtitle.Render(refreshLine))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 
 	// Table.
 	b.WriteString(m.table.View())
@@ -291,6 +371,33 @@ func (m model) View() tea.View {
 	v.AltScreen = true
 	v.WindowTitle = "Tillit Status"
 	return v
+}
+
+func (m *model) rebuildTableLocked() {
+	cols, rows := buildTableData(m.branch, m.verification, m.theme)
+	// Preserve cursor position when possible.
+	cursor := m.table.Cursor()
+	m.table.SetColumns(cols)
+	m.table.SetRows(rows)
+	if cursor < len(rows) {
+		for range cursor {
+			m.table.MoveDown(1)
+		}
+	}
+}
+
+func (m model) refreshCmd() tea.Cmd {
+	if m.repo == "" {
+		return nil
+	}
+	repo := m.repo
+	interval := m.interval
+	return tea.Tick(interval, func(t time.Time) tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		msg := fetchStatusMsg(ctx, repo, t)
+		return msg
+	})
 }
 
 func isColorEnabled(t ui.Theme) bool  { return t.ColorEnabled }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"slices"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/nnutter/commitstack"
@@ -28,13 +29,16 @@ By default, status renders an interactive TUI (Bubble Tea + Bubbles + Lip Gloss)
 when attached to a terminal, and a plain, scriptable summary otherwise.
 Use --simple for plain output and --interactive to force the TUI.
 The design language is centralized in internal/ui/theme.go and uses
-semantic colors for every state (passed/failed/pending/error, verified/rejected/unsupported).
+semantic colors for every state (passed/failed/pending/running/error, verified/rejected/unsupported).
+The TUI auto-refreshes every 250ms (configurable with --interval) so that
+validation states transition pending → running → passed/failed without restart.
 `,
 		Args: cobra.NoArgs,
 		RunE: run,
 	}
 	cmd.Flags().Bool("interactive", false, "force interactive TUI")
 	cmd.Flags().Bool("simple", false, "render plain text without TUI or colors")
+	cmd.Flags().Duration("interval", 250*time.Millisecond, "refresh interval for interactive TUI")
 	return cmd
 }
 
@@ -45,6 +49,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
 	simpleFlag, _ := cmd.Flags().GetBool("simple")
+	interval, _ := cmd.Flags().GetDuration("interval")
 
 	running, err := daemon.Running(repo)
 	if err != nil {
@@ -82,7 +87,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		// Interactive path - requires Bubble Tea.
 		theme := ui.Default()
 		// Allow bubbletea to update theme on BackgroundColorMsg.
-		return runInteractive(cmd, branch, verification, running, theme)
+		return runInteractive(cmd, repo, branch, verification, running, theme, interval)
 	}
 
 	// Non-TTY auto plain - but still with improved header/summary (plain theme).
@@ -102,8 +107,8 @@ func isTerminal(w io.Writer) bool {
 	return false
 }
 
-func runInteractive(cmd *cobra.Command, branch auditor.BranchResult, verification verifier.BranchResult, running bool, theme ui.Theme) error {
-	m := NewModel(branch, verification, running, theme)
+func runInteractive(cmd *cobra.Command, repo string, branch auditor.BranchResult, verification verifier.BranchResult, running bool, theme ui.Theme, interval time.Duration) error {
+	m := NewModelWithRepo(branch, verification, running, theme, repo, interval)
 
 	// Bubble Tea v2: View sets AltScreen declaratively.
 	// We supply output/input from cobra so tests can capture.
