@@ -116,6 +116,7 @@ type model struct {
 	detailOutcome  auditor.BranchOutcome
 	detailViewport viewport.Model
 	detailLoading  bool
+	pendingG       bool // for vim-style gg
 }
 
 type refreshMsg struct {
@@ -169,7 +170,21 @@ func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchR
 	m.help.SetWidth(80)
 	m.detailViewport = viewport.New(viewport.WithWidth(70), viewport.WithHeight(16))
 	m.detailViewport.SoftWrap = true
+	m.detailViewport.KeyMap = detailViewportKeyMap()
 	return m
+}
+
+func detailViewportKeyMap() viewport.KeyMap {
+	km := viewport.DefaultKeyMap()
+	km.PageUp = key.NewBinding(
+		key.WithKeys("ctrl+b", "b", "pgup"),
+		key.WithHelp("^b/b/pgup", "page up"),
+	)
+	km.PageDown = key.NewBinding(
+		key.WithKeys("ctrl+f", "f", "pgdown"),
+		key.WithHelp("^f/f/pgdn", "page down"),
+	)
+	return km
 }
 
 func fetchStatusMsg(ctx context.Context, repo string, at time.Time) refreshMsg {
@@ -497,9 +512,9 @@ func (m model) renderDetail() string {
 		inner.WriteString(m.detailViewport.View())
 	}
 	inner.WriteString("\n")
-	footer := "↑/↓ scroll  •  esc to close"
+	footer := "gg/G top/bottom  •  ^b/^f page  •  ↑/↓ scroll  •  esc to close"
 	if !m.theme.ColorEnabled {
-		footer = "up/down scroll  esc to close"
+		footer = "gg/G top/bottom  ^b/^f page  up/down scroll  esc to close"
 	}
 	inner.WriteString(m.theme.DetailFooter.Render(footer))
 
@@ -603,12 +618,31 @@ func updateDetailKey(m *model, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, m.keys.Quit):
 		m.showDetail = false
 		m.detailHash = ""
+		m.pendingG = false
 		return *m, nil
 	case key.Matches(msg, m.keys.Detail):
 		m.showDetail = false
 		m.detailHash = ""
+		m.pendingG = false
 		return *m, nil
 	}
+	// gg goes to top, G goes to bottom.
+	if msg.String() == "g" {
+		if m.pendingG {
+			m.pendingG = false
+			m.detailViewport.GotoTop()
+			return *m, nil
+		}
+		m.pendingG = true
+		return *m, nil
+	}
+	if msg.String() == "G" {
+		m.pendingG = false
+		m.detailViewport.GotoBottom()
+		return *m, nil
+	}
+	// Reset pendingG on any other key (vim-style cancels gg).
+	m.pendingG = false
 	var cmd tea.Cmd
 	m.detailViewport, cmd = m.detailViewport.Update(msg)
 	return *m, cmd
