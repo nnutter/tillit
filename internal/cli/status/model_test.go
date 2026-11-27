@@ -155,3 +155,34 @@ func TestAutoRefreshMetadataAppearsInFooter(t *testing.T) {
 	assert.Greater(t, refreshIdx, tableIdx, "auto-refresh metadata should appear after the commit table")
 	assert.Greater(t, refreshIdx, helpIdx, "auto-refresh metadata should appear below the help footer")
 }
+
+func TestHeaderLayout(t *testing.T) {
+	branch, verification := sampleStatusData()
+	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+
+	view := m.View()
+	assert.Equal(t, "Tillit", view.WindowTitle)
+
+	lines := strings.Split(stripANSI(view.Content), "\n")
+	titleIdx, metaIdx, validIdx := -1, -1, -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "Tillit" {
+			titleIdx = i
+		}
+		if strings.Contains(line, "Branch:") {
+			metaIdx = i
+		}
+		if strings.Contains(line, "Validation:") {
+			validIdx = i
+		}
+	}
+
+	require.NotEqual(t, -1, titleIdx, "expected standalone Tillit title line")
+	require.NotEqual(t, -1, metaIdx, "expected branch metadata line")
+	require.NotEqual(t, -1, validIdx, "expected validation summary line")
+	assert.Equal(t, strings.Index(lines[metaIdx], "Branch:"), strings.Index(lines[titleIdx], "Tillit"), "Tillit title should align with Branch without extra indent")
+	assert.Contains(t, lines[metaIdx], "Daemon:")
+	assert.Equal(t, metaIdx+2, validIdx, "expected blank line between metadata line and summaries")
+	assert.Empty(t, strings.TrimSpace(lines[metaIdx+1]))
+}

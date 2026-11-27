@@ -154,10 +154,7 @@ func New(colorEnabled, hasDark bool) Theme {
 
 	t.Title = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(cPrimary).
-		Padding(0, 1).
-		Border(lipgloss.RoundedBorder(), false, false, false, false).
-		BorderForeground(cPrimary)
+		Foreground(cPrimary)
 
 	t.Subtitle = lipgloss.NewStyle().
 		Foreground(cMuted).

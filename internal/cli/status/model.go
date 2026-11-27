@@ -390,25 +390,26 @@ func (m model) View() tea.View {
 	var b strings.Builder
 
 	// Header - semantic.
-	title := m.theme.Title.Render(" Tillit Status ")
+	b.WriteString(m.theme.Title.Render("Tillit"))
+	b.WriteString("\n")
+
 	daemonStr := m.theme.DaemonBadge(m.daemonRunning)
 	if m.theme.ColorEnabled {
-		daemonStr = fmt.Sprintf("Daemon %s", daemonStr)
+		daemonStr = m.theme.BranchInfo.Render("Daemon: ") + daemonStr
 	} else {
 		daemonStr = fmt.Sprintf("daemon: %s", daemonStr)
 	}
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, title, "   ", daemonStr))
-	b.WriteString("\n")
-
 	if len(m.branch.Snapshot.Branch) > 0 {
 		branchLine := fmt.Sprintf("Branch: %s   Head: %s   Base: %s",
 			m.branch.Snapshot.Branch,
 			ui.ShortHash(m.branch.Snapshot.Head),
 			ui.ShortHash(m.branch.Snapshot.Base),
 		)
-		b.WriteString(m.theme.BranchInfo.Render(branchLine))
-		b.WriteString("\n")
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, m.theme.BranchInfo.Render(branchLine), "   ", daemonStr))
+	} else {
+		b.WriteString(daemonStr)
 	}
+	b.WriteString("\n\n")
 
 	b.WriteString(buildSummary(m.branch, m.verification, m.theme))
 	b.WriteString("\n\n")
@@ -446,7 +447,7 @@ func (m model) View() tea.View {
 
 	v := tea.NewView(content)
 	v.AltScreen = true
-	v.WindowTitle = "Tillit Status"
+	v.WindowTitle = "Tillit"
 	return v
 }
 

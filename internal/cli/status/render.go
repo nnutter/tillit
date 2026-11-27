@@ -34,7 +34,7 @@ func renderPlain(w io.Writer, branch auditor.BranchResult, verification verifier
 	var b strings.Builder
 
 	// Title
-	b.WriteString("Tillit Status\n")
+	b.WriteString("Tillit\n")
 	b.WriteString(strings.Repeat("=", 30) + "\n")
 
 	// Daemon line - keep legacy "daemon:" prefix for compatibility.
@@ -116,29 +116,30 @@ func plainVerification(out verifier.BranchOutcome) string {
 func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) error {
 	var b strings.Builder
 
-	// Title + daemon badge.
-	title := theme.Title.Render(" Tillit Status ")
+	// Title on its own line.
+	b.WriteString(theme.Title.Render("Tillit"))
+	b.WriteString("\n")
+
+	// Branch + daemon metadata line.
 	daemonStr := theme.DaemonBadge(daemonRunning)
 	daemonLine := fmt.Sprintf("daemon: %s   %s", map[bool]string{true: "running", false: "stopped"}[daemonRunning], daemonStr)
 	if theme.ColorEnabled {
-		prefix := theme.SummaryLabel.Render("daemon:")
+		prefix := theme.BranchInfo.Render("Daemon:")
 		daemonLine = lipgloss.JoinHorizontal(lipgloss.Left,
 			prefix, " ", daemonStr,
 		)
 	}
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, title, "   ", daemonLine))
-	b.WriteString("\n")
-
-	// Branch line.
 	if len(branch.Snapshot.Branch) > 0 {
 		branchLine := fmt.Sprintf("Branch: %s   Head: %s   Base: %s",
 			branch.Snapshot.Branch,
 			ui.ShortHash(branch.Snapshot.Head),
 			ui.ShortHash(branch.Snapshot.Base),
 		)
-		b.WriteString(theme.BranchInfo.Render(branchLine))
-		b.WriteString("\n")
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, theme.BranchInfo.Render(branchLine), "   ", daemonLine))
+	} else {
+		b.WriteString(daemonLine)
 	}
+	b.WriteString("\n\n")
 
 	b.WriteString(buildSummary(branch, verification, theme))
 	b.WriteString("\n\n")
