@@ -75,3 +75,16 @@ func TestViewStacksValidationAndVerificationSummaries(t *testing.T) {
 	assert.LessOrEqual(t, lipgloss.Width(strings.TrimSpace(validLine)), 80)
 	assert.LessOrEqual(t, lipgloss.Width(strings.TrimSpace(verifLine)), 80)
 }
+
+func TestTableShowsOnlyStatusBadgesWithoutDescriptions(t *testing.T) {
+	branch, verification := sampleStatusData()
+	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+
+	view := m.View().Content
+	assert.Contains(t, view, "✓ passed")
+	assert.Contains(t, view, "⚠ error")
+	assert.Contains(t, view, "✓ verified")
+	assert.Contains(t, view, "○ unsupported")
+	assert.NotContains(t, view, "validate command is not configured")
+	assert.NotContains(t, view, "commit must modify exactly one file")
+}

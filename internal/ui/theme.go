@@ -336,29 +336,14 @@ func (t Theme) ValidationStyle(state string) lipgloss.Style {
 	}
 }
 
-// VerificationBadge returns verification badge from (status, reason, err)
-// status is verifier.Status string ("verified", "rejected", "unsupported", "").
-func (t Theme) VerificationBadge(status, reason, errStr string) string {
-	if errStr != "" {
-		if !t.ColorEnabled {
-			return "error: " + errStr
-		}
-		icon := t.SymError
-		return t.VerificationError.Render(fmt.Sprintf("%s error: %s", icon, errStr))
-	}
-	if status == "" {
-		if !t.ColorEnabled {
-			return "pending"
-		}
-		icon := t.SymPending
-		return t.VerificationPending.Render(fmt.Sprintf("%s pending", icon))
-	}
+// VerificationBadge returns a "✓ verified" style badge for a verification status.
+func (t Theme) VerificationBadge(status string) string {
 	label := status
-	if reason != "" {
-		label = fmt.Sprintf("%s: %s", status, reason)
+	if label == "" {
+		label = "pending"
 	}
-	icon := t.VerificationIcon(status)
-	style := t.VerificationStyle(status)
+	icon := t.VerificationIcon(label)
+	style := t.VerificationStyle(label)
 	if !t.ColorEnabled {
 		return label
 	}

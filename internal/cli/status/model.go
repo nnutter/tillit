@@ -299,10 +299,10 @@ func tableStyles(theme ui.Theme) table.Styles {
 
 func buildTableData(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme) ([]table.Column, []table.Row) {
 	cols := []table.Column{
-		{Title: "Commit", Width: 10},
-		{Title: "Subject", Width: 32},
-		{Title: "Validation", Width: 14},
-		{Title: "Verification", Width: 28},
+		{Title: "Commit", Width: 8},
+		{Title: "Subject", Width: 38},
+		{Title: "Validation", Width: 12},
+		{Title: "Verification", Width: 14},
 	}
 
 	byHash := make(map[string]verifier.BranchOutcome, len(verification.Outcomes))
@@ -313,21 +313,8 @@ func buildTableData(branch auditor.BranchResult, verification verifier.BranchRes
 	var rows []table.Row
 	for _, item := range branch.Outcomes {
 		hash := ui.ShortHash(item.Hash)
-		subject := truncateSubject(item.Subject, 32)
+		subject := truncateSubject(item.Subject, 38)
 		val := theme.ValidationBadge(item.State)
-		// For table we want badge text (icon + state) when colored, plain when not.
-		// ValidationBadge already returns plain when !ColorEnabled.
-		// Append error if present.
-		if hasError(item.Error) {
-			if isColorDisabled(theme) {
-				val = fmt.Sprintf("%s: %s", item.State, item.Error)
-			} else if isColorEnabled(theme) {
-				// Show error style inside badge already via theme; append as muted second line is complex.
-				// Instead embed error in badge string.
-				val = fmt.Sprintf("%s %s", theme.ValidationBadge(item.State), theme.Subtitle.Render(item.Error))
-			}
-		}
-
 		vOut := byHash[item.Hash]
 		verif := verificationBadge(vOut, theme)
 
@@ -341,12 +328,12 @@ func buildTableData(branch auditor.BranchResult, verification verifier.BranchRes
 
 func verificationBadge(out verifier.BranchOutcome, theme ui.Theme) string {
 	if out.Error != "" {
-		return theme.VerificationBadge("", "", out.Error)
+		return theme.VerificationBadge("error")
 	}
 	if out.Result == nil {
-		return theme.VerificationBadge("", "", "")
+		return theme.VerificationBadge("pending")
 	}
-	return theme.VerificationBadge(string(out.Result.Status), out.Result.Reason, "")
+	return theme.VerificationBadge(string(out.Result.Status))
 }
 
 func truncateSubject(s string, max int) string {
@@ -669,7 +656,6 @@ func openDetail(m *model) (tea.Model, tea.Cmd) {
 	)
 }
 
-func isColorEnabled(t ui.Theme) bool  { return t.ColorEnabled }
 func isColorDisabled(t ui.Theme) bool { return !t.ColorEnabled }
 func hasError(s string) bool          { return s != "" }
 func isPositive(n int) bool           { return n > 0 }
