@@ -145,15 +145,6 @@ func decodeDocument(data []byte, path string) (document, error) {
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return document{}, fmt.Errorf("read tillit config %s: %w", path, err)
 	}
-	var envelope struct {
-		Auditor map[string]jsontext.Value `json:"auditor"`
-	}
-	if err := json.Unmarshal(data, &envelope); err != nil {
-		return document{}, fmt.Errorf("read tillit config %s: %w", path, err)
-	}
-	if _, ok := envelope.Auditor["verify"]; ok {
-		return document{}, fmt.Errorf("read tillit config %s: auditor.verify was renamed; move its settings to auditor.validate", path)
-	}
 	return doc, nil
 }
 

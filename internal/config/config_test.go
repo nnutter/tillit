@@ -25,20 +25,6 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 	require.Equal(t, []string{"from-worktree"}, cfg.Command)
 }
 
-func TestLoadRejectsLegacyVerificationSettings(t *testing.T) {
-	gitDir := tempGitDir(t)
-	path := filepath.Join(gitDir, "tillit", "config.json")
-	writeConfig(t, path, `{"auditor":{"verify":{"command":["true"]},"validate":{"command":["true"]}}}`)
-	_, err := config.Load(gitDir)
-	require.ErrorContains(t, err, path)
-	require.ErrorContains(t, err, "auditor.verify")
-	require.ErrorContains(t, err, "auditor.validate")
-	_, err = config.Show(gitDir, config.ScopeWorktree)
-	require.ErrorContains(t, err, "auditor.validate")
-	err = config.Set(gitDir, config.ScopeWorktree, "auditor.validate.command", []string{"true"})
-	require.ErrorContains(t, err, "auditor.verify")
-}
-
 func tempGitDir(t *testing.T) string {
 	t.Helper()
 	t.Setenv("HOME", t.TempDir())

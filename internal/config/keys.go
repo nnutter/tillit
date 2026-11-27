@@ -1,9 +1,6 @@
 package config
 
-import (
-	"fmt"
-	"strings"
-)
+import "fmt"
 
 const commandKey = "auditor.validate.command"
 
@@ -13,12 +10,8 @@ func Keys() []string {
 }
 
 func checkKey(key string) error {
-	switch {
-	case key == commandKey:
+	if key == commandKey {
 		return nil
-	case key == "auditor.verify", strings.HasPrefix(key, "auditor.verify."):
-		return fmt.Errorf("config key %q was renamed; use auditor.validate instead of auditor.verify", key)
-	default:
-		return fmt.Errorf("unknown config key %q", key)
 	}
+	return fmt.Errorf("unknown config key %q", key)
 }
