@@ -152,7 +152,7 @@ func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchR
 	}
 
 	// Build table columns/rows.
-	cols, rows := buildTableData(branch, verification, theme, 0)
+	cols, rows := buildTableData(branch, verification, theme, 0, defaultTableWidth)
 	m.table = table.New(
 		table.WithColumns(cols),
 		table.WithRows(rows),
@@ -293,13 +293,20 @@ func tableStyles(theme ui.Theme) table.Styles {
 	}
 }
 
-func buildTableData(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme, cursor int) ([]table.Column, []table.Row) {
+const (
+	defaultTableWidth = 80
+	minSubjectWidth   = 35
+	fixedColumnsWidth = 43 // (1+2) + (8+2) + (12+2) + (12+2) + 2 subject cell padding
+)
+
+func buildTableData(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme, cursor, tableWidth int) ([]table.Column, []table.Row) {
+	subjectWidth := max(minSubjectWidth, tableWidth-fixedColumnsWidth)
 	cols := []table.Column{
 		{Title: "", Width: 1},
 		{Title: "Commit", Width: 8},
-		{Title: "Subject", Width: 35},
 		{Title: "Validation", Width: 12},
-		{Title: "Verification", Width: 14},
+		{Title: "Verification", Width: 12},
+		{Title: "Commit Subject", Width: subjectWidth},
 	}
 
 	byHash := make(map[string]verifier.BranchOutcome, len(verification.Outcomes))
@@ -314,15 +321,15 @@ func buildTableData(branch auditor.BranchResult, verification verifier.BranchRes
 			indicator = theme.SymSelected
 		}
 		hash := ui.ShortHash(item.Hash)
-		subject := truncateSubject(item.Subject, 35)
 		val := theme.ValidationBadge(item.State)
 		vOut := byHash[item.Hash]
 		verif := verificationBadge(vOut, theme)
+		subject := truncateSubject(item.Subject, subjectWidth)
 
-		rows = append(rows, table.Row{indicator, hash, subject, val, verif})
+		rows = append(rows, table.Row{indicator, hash, val, verif, subject})
 	}
 	if len(rows) == 0 {
-		rows = []table.Row{{" ", "", "No commits selected for this branch", "", ""}}
+		rows = []table.Row{{" ", "", "", "", "No commits selected for this branch"}}
 	}
 	return cols, rows
 }
@@ -442,7 +449,7 @@ func (m model) View() tea.View {
 }
 
 func (m *model) rebuildTableLocked() {
-	cols, rows := buildTableData(m.branch, m.verification, m.theme, m.table.Cursor())
+	cols, rows := buildTableData(m.branch, m.verification, m.theme, m.table.Cursor(), m.tableWidth())
 	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
 }
@@ -527,6 +534,13 @@ func (m *model) syncSelectionIndicator() {
 	}
 }
 
+func (m model) tableWidth() int {
+	if m.width <= 0 {
+		return defaultTableWidth
+	}
+	return max(40, m.width-4)
+}
+
 func updateRefreshMsg(m *model, msg refreshMsg) (tea.Model, tea.Cmd) {
 	m.fetchErr = msg.fetchErr
 	if msg.fetchErr == nil {
@@ -556,10 +570,11 @@ func updateFeedbackMsg(m *model, msg feedbackMsg) (tea.Model, tea.Cmd) {
 func updateWindowSizeMsg(m *model, msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
-	w := max(40, msg.Width-4)
+	w := m.tableWidth()
 	h := max(8, msg.Height-12)
 	m.table.SetWidth(w)
 	m.table.SetHeight(h)
+	m.rebuildTableLocked()
 	m.help.SetWidth(w)
 	vw := max(40, w-10)
 	vh := max(8, h-8)

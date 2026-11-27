@@ -145,7 +145,7 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 	b.WriteString("\n\n")
 
 	// Table for commits - bubbles/table.
-	cols, rows := buildTableData(branch, verification, theme, -1)
+	cols, rows := buildTableData(branch, verification, theme, -1, defaultTableWidth)
 	t := table.New(
 		table.WithColumns(cols),
 		table.WithRows(rows),

@@ -179,3 +179,31 @@ func TestHeaderLayout(t *testing.T) {
 	assert.Equal(t, metaIdx+2, validIdx, "expected blank line between metadata line and summaries")
 	assert.Empty(t, strings.TrimSpace(lines[metaIdx+1]))
 }
+
+func TestTableColumnOrderAndExpandedSubject(t *testing.T) {
+	branch, verification := sampleStatusData()
+	longSubject := "Refactor status table layout so commit subjects use remaining terminal width"
+	branch.Outcomes[0].Subject = longSubject
+	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+
+	resized, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
+	plain := stripANSI(resized.(model).View().Content)
+
+	var header string
+	for line := range strings.SplitSeq(plain, "\n") {
+		if strings.Contains(line, "Commit Subject") {
+			header = line
+			break
+		}
+	}
+	require.NotEmpty(t, header)
+
+	commitPos := strings.Index(header, "Commit")
+	validPos := strings.Index(header, "Validation")
+	verifPos := strings.Index(header, "Verification")
+	subjPos := strings.Index(header, "Commit Subject")
+	assert.Less(t, commitPos, validPos)
+	assert.Less(t, validPos, verifPos)
+	assert.Less(t, verifPos, subjPos)
+	assert.Contains(t, plain, longSubject)
+}
