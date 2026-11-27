@@ -10,8 +10,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/repository"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestSnapshotBranchBoundary(t *testing.T) {
@@ -95,7 +96,7 @@ func TestSnapshotBranchRequiresBoundaryAndBranch(t *testing.T) {
 
 func snapshotRepo(t *testing.T) (string, string) {
 	t.Helper()
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	dir := t.TempDir()
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
 	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")

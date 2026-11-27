@@ -16,10 +16,11 @@ import (
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/auditor"
 	"github.com/nnutter/tillit/internal/cli"
 	"github.com/nnutter/tillit/internal/daemon"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestStatusShowsEveryBranchCommit(t *testing.T) {
@@ -140,7 +141,7 @@ func cleanRepo(t *testing.T) string {
 
 func initRepo(t *testing.T, committed, staged []byte) string {
 	t.Helper()
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	repo, err := git.PlainInit(dir, false)

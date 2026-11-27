@@ -14,12 +14,13 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/repository"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestDetachedDaemonLifecycle(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	bin := filepath.Join(t.TempDir(), "tillit")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
@@ -131,7 +132,7 @@ func checkForeground(t *testing.T, bin, repo string, env []string, interrupt boo
 }
 
 func TestStopKillStopsValidationDescendants(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	bin := filepath.Join(t.TempDir(), "tillit")
 	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()

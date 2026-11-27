@@ -9,13 +9,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/auditor"
 	"github.com/nnutter/tillit/internal/repository"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
@@ -66,7 +67,7 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 }
 
 func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))

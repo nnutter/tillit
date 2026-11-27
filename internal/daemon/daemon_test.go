@@ -10,7 +10,7 @@ import (
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/tillit/internal/testutil"
+	"github.com/nnutter/gittest"
 )
 
 const beforeFile = `package p
@@ -29,7 +29,7 @@ func f() {
 
 func newRepo(t *testing.T) string {
 	t.Helper()
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	repo, err := git.PlainInit(dir, false)
