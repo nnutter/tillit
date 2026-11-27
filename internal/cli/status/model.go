@@ -98,10 +98,9 @@ type model struct {
 	verification  verifier.BranchResult
 	daemonRunning bool
 
-	repo      string
-	interval  time.Duration
-	lastFetch time.Time
-	fetchErr  error
+	repo     string
+	interval time.Duration
+	fetchErr error
 
 	width  int
 	height int
@@ -124,7 +123,6 @@ type refreshMsg struct {
 	verification  verifier.BranchResult
 	daemonRunning bool
 	fetchErr      error
-	at            time.Time
 }
 
 type feedbackMsg struct {
@@ -150,7 +148,6 @@ func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchR
 		daemonRunning: daemonRunning,
 		repo:          repo,
 		interval:      interval,
-		lastFetch:     time.Now(),
 		keys:          defaultKeyMap(),
 	}
 
@@ -187,28 +184,27 @@ func detailViewportKeyMap() viewport.KeyMap {
 	return km
 }
 
-func fetchStatusMsg(ctx context.Context, repo string, at time.Time) refreshMsg {
+func fetchStatusMsg(ctx context.Context, repo string) refreshMsg {
 	running, err := daemon.Running(repo)
 	if err != nil {
-		return refreshMsg{fetchErr: fmt.Errorf("report daemon: %w", err), at: at}
+		return refreshMsg{fetchErr: fmt.Errorf("report daemon: %w", err)}
 	}
 	branch, err := auditor.ReportBranch(ctx, repo)
 	if err != nil {
-		return refreshMsg{fetchErr: err, at: at}
+		return refreshMsg{fetchErr: err}
 	}
 	normalizeValidationRunning(&branch, running)
 	verification, err := verifier.ReportBranch(ctx, repo)
 	if err != nil {
-		return refreshMsg{fetchErr: fmt.Errorf("report verification: %w", err), at: at}
+		return refreshMsg{fetchErr: fmt.Errorf("report verification: %w", err)}
 	}
 	if !sameSnapshot(branch.Snapshot, verification.Snapshot) {
-		return refreshMsg{fetchErr: fmt.Errorf("branch changed while collecting status; retry"), at: at}
+		return refreshMsg{fetchErr: fmt.Errorf("branch changed while collecting status; retry")}
 	}
 	return refreshMsg{
 		branch:        branch,
 		verification:  verification,
 		daemonRunning: running,
-		at:            at,
 	}
 }
 
@@ -420,15 +416,9 @@ func (m model) View() tea.View {
 
 	// Help footer.
 	b.WriteString(m.help.View(m.keys))
-
-	// Secondary refresh metadata in footer.
-	if m.repo != "" {
-		refreshLine := fmt.Sprintf("auto-refresh %s • last updated %s", m.interval, m.lastFetch.Format("15:04:05"))
-		if m.fetchErr != nil {
-			refreshLine += fmt.Sprintf(" • %v", m.fetchErr)
-		}
+	if m.fetchErr != nil {
 		b.WriteString("\n")
-		b.WriteString(m.theme.Help.Render(refreshLine))
+		b.WriteString(m.theme.Help.Render(fmt.Sprintf("refresh error: %v", m.fetchErr)))
 	}
 
 	// Apply document padding.
@@ -463,11 +453,10 @@ func (m model) refreshCmd() tea.Cmd {
 	}
 	repo := m.repo
 	interval := m.interval
-	return tea.Tick(interval, func(t time.Time) tea.Msg {
+	return tea.Tick(interval, func(_ time.Time) tea.Msg {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		msg := fetchStatusMsg(ctx, repo, t)
-		return msg
+		return fetchStatusMsg(ctx, repo)
 	})
 }
 
@@ -539,7 +528,6 @@ func (m *model) syncSelectionIndicator() {
 }
 
 func updateRefreshMsg(m *model, msg refreshMsg) (tea.Model, tea.Cmd) {
-	m.lastFetch = msg.at
 	m.fetchErr = msg.fetchErr
 	if msg.fetchErr == nil {
 		m.branch = msg.branch

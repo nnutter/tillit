@@ -140,20 +140,13 @@ func TestSelectedRowShowsIndicatorWithoutIndenting(t *testing.T) {
 	assert.Equal(t, colOf(row0, "aaaaaaa"), colOf(row1, "bbbbbbb"), "alignment should hold after moving selection")
 }
 
-func TestAutoRefreshMetadataAppearsInFooter(t *testing.T) {
+func TestViewOmitsAutoRefreshFooter(t *testing.T) {
 	branch, verification := sampleStatusData()
 	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	plain := stripANSI(m.View().Content)
-	tableIdx := strings.Index(plain, "Second commit")
-	helpIdx := strings.Index(plain, "view feedback")
-	refreshIdx := strings.Index(plain, "auto-refresh")
-
-	require.NotEqual(t, -1, tableIdx)
-	require.NotEqual(t, -1, helpIdx)
-	require.NotEqual(t, -1, refreshIdx)
-	assert.Greater(t, refreshIdx, tableIdx, "auto-refresh metadata should appear after the commit table")
-	assert.Greater(t, refreshIdx, helpIdx, "auto-refresh metadata should appear below the help footer")
+	assert.NotContains(t, plain, "auto-refresh")
+	assert.NotContains(t, plain, "last updated")
 }
 
 func TestHeaderLayout(t *testing.T) {
