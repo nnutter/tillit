@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
+	"github.com/nnutter/commitstack"
 
 	"github.com/nnutter/tillit/internal/config"
 	"github.com/nnutter/tillit/internal/repository"
@@ -28,7 +29,7 @@ func ReportEvidence(ctx context.Context, repoPath string) (BranchResult, error) 
 }
 
 func reportBranch(ctx context.Context, repoPath string, includeEvidence bool) (BranchResult, error) {
-	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
+	snapshot, err := repository.SnapshotStacks(ctx, repoPath)
 	if err != nil {
 		return BranchResult{}, err
 	}
@@ -49,15 +50,15 @@ func reportBranch(ctx context.Context, repoPath string, includeEvidence bool) (B
 		return BranchResult{}, err
 	}
 	result := BranchResult{Snapshot: snapshot}
-	for _, hash := range snapshot.Commits {
+	for _, stack := range snapshot.Stacks {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		commit, err := repo.CommitObject(plumbing.NewHash(hash))
+		commit, err := repo.CommitObject(plumbing.NewHash(stack.Tip))
 		if err != nil {
 			return result, err
 		}
-		outcome, err := branchReportOutcome(ctx, db, hasEvidence, gitDir, commit)
+		outcome, err := branchReportOutcome(ctx, db, hasEvidence, gitDir, stack, commit)
 		if err != nil {
 			return result, err
 		}
@@ -101,8 +102,8 @@ func openBranchReport(ctx context.Context, gitDir string) (*sql.DB, error) {
 	return db, nil
 }
 
-func branchReportOutcome(ctx context.Context, db *sql.DB, hasEvidence bool, gitDir string, commit *object.Commit) (BranchOutcome, error) {
-	out := BranchOutcome{Hash: commit.Hash.String(), Subject: subjectOf(commit.Message), State: "pending"}
+func branchReportOutcome(ctx context.Context, db *sql.DB, hasEvidence bool, gitDir string, stack commitstack.Stack, commit *object.Commit) (BranchOutcome, error) {
+	out := BranchOutcome{Hash: stack.Tip, Subject: stack.Subject, State: "pending"}
 	data, err := historicalConfig(commit)
 	if err != nil {
 		return out, err

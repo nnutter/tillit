@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path"
 	"strings"
+
+	"github.com/nnutter/commitstack"
 )
 
 type treeEntry struct {
@@ -33,7 +35,20 @@ func VerifyCommit(ctx context.Context, repo, hash string) (Result, error) {
 	if len(parents) != 1 {
 		return unsupportedCommit("commit must have exactly one parent"), nil
 	}
-	before, err := readTree(ctx, repo, parents[0])
+	return verifyChange(ctx, repo, parents[0], hash)
+}
+
+// VerifyStack compares the immutable trees before a commit stack's original
+// commit and at its tip, so attached fixups count as part of one change.
+func VerifyStack(ctx context.Context, repo string, stack commitstack.Stack) (Result, error) {
+	if !validHashLength(stack.Base) || !validHashLength(stack.Tip) {
+		return Result{}, fmt.Errorf("stack must use full object IDs")
+	}
+	return verifyChange(ctx, repo, stack.Base, stack.Tip)
+}
+
+func verifyChange(ctx context.Context, repo, parent, hash string) (Result, error) {
+	before, err := readTree(ctx, repo, parent)
 	if err != nil {
 		return Result{}, err
 	}

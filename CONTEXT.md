@@ -8,6 +8,11 @@ Tillit checks the existing Git commits on a feature branch.
 A Git commit on the feature branch, identified by its commit hash.
 *Avoid*: Revision
 
+**Commit stack**:
+An original commit on the feature branch together with the fixup!, reword!, and amend! commits attached to it, identified by its tip commit hash.
+Tillit validates and verifies each commit stack as a unit, at its tip.
+*Avoid*: Per-fixup results
+
 **Validation**:
 Tillit's recorded result of running a configured operational check on a commit.
 Passing tests can provide empirical confidence that a refactor preserves behavior, but a passing check is not semantic verification.

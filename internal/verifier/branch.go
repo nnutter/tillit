@@ -14,6 +14,8 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"github.com/nnutter/commitstack"
+
 	"github.com/nnutter/tillit/internal/repository"
 )
 
@@ -25,9 +27,9 @@ type BranchOutcome struct {
 	Error  string
 }
 
-// BranchResult associates static outcomes with the selected immutable commits.
+// BranchResult associates one static outcome with each selected commit stack.
 type BranchResult struct {
-	Snapshot repository.BranchSnapshot
+	Snapshot commitstack.Snapshot
 	Outcomes []BranchOutcome
 }
 
@@ -43,7 +45,7 @@ func ReportBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 }
 
 func branch(ctx context.Context, repoPath string, verify bool) (BranchResult, error) {
-	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
+	snapshot, err := repository.SnapshotStacks(ctx, repoPath)
 	if err != nil {
 		return BranchResult{}, err
 	}
@@ -60,11 +62,11 @@ func branch(ctx context.Context, repoPath string, verify bool) (BranchResult, er
 		defer func() { _ = db.Close() }()
 	}
 	result := BranchResult{Snapshot: snapshot}
-	for _, hash := range snapshot.Commits {
+	for _, stack := range snapshot.Stacks {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		outcome, err := branchCommit(ctx, db, repoPath, hash, verify)
+		outcome, err := branchStack(ctx, db, repoPath, stack, verify)
 		if err != nil {
 			return result, err
 		}
@@ -118,7 +120,8 @@ func openVerificationReport(ctx context.Context, path string) (*sql.DB, error) {
 	return db, nil
 }
 
-func branchCommit(ctx context.Context, db *sql.DB, repo, hash string, verify bool) (BranchOutcome, error) {
+func branchStack(ctx context.Context, db *sql.DB, repo string, stack commitstack.Stack, verify bool) (BranchOutcome, error) {
+	hash := stack.Tip
 	outcome := BranchOutcome{Hash: hash}
 	if db == nil {
 		return outcome, nil
@@ -134,7 +137,7 @@ func branchCommit(ctx context.Context, db *sql.DB, repo, hash string, verify boo
 	if cached != nil {
 		return outcome, nil
 	}
-	checked, err := VerifyCommit(ctx, repo, hash)
+	checked, err := VerifyStack(ctx, repo, stack)
 	if err != nil {
 		if ctx.Err() != nil {
 			return outcome, ctx.Err()

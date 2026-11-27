@@ -32,6 +32,8 @@ func branchRepo(t *testing.T) (string, string) {
 	base := branchGit(t, dir, "rev-parse", "HEAD")
 	branchGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	branchGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	branchGit(t, dir, "config", "branch.master.remote", ".")
+	branchGit(t, dir, "config", "branch.master.merge", "refs/remotes/origin/main")
 	log := filepath.Join(t.TempDir(), "calls")
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(`{"auditor":{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}}`), 0o644))
@@ -77,7 +79,7 @@ func TestRunContinuesAfterMissingBoundary(t *testing.T) {
 	go func() { done <- daemon.Run(ctx, dir) }()
 	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
 	_, err := auditor.ReportBranch(t.Context(), dir)
-	require.ErrorContains(t, err, "fork-point")
+	require.ErrorContains(t, err, "upstream")
 	branchGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	require.Eventually(t, func() bool {
 		data, _ := os.ReadFile(log)

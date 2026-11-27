@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v6"
+	gitconfig "github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
@@ -87,7 +88,10 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 			out = execute(t, dir, "status")
 			require.Contains(t, out, mixed.String()+" other change")
 			if configured {
-				require.Contains(t, out, rename.String()+" rename failed")
+				require.Eventually(t, func() bool {
+					out = execute(t, dir, "status")
+					return strings.Contains(out, rename.String()+" rename failed")
+				}, 10*time.Second, 100*time.Millisecond, "status: %s", out)
 			} else {
 				require.Contains(t, out, "validate command is not configured")
 			}
@@ -164,6 +168,8 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 	require.NoError(t, err)
 	require.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference("refs/remotes/origin/main", base)))
 	require.NoError(t, repo.Storer.SetReference(plumbing.NewSymbolicReference("refs/remotes/origin/HEAD", "refs/remotes/origin/main")))
+	cfg.Branches["master"] = &gitconfig.Branch{Name: "master", Remote: ".", Merge: "refs/remotes/origin/main"}
+	require.NoError(t, repo.SetConfig(cfg))
 	if !bytes.Equal(committed, staged) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), staged, 0o644))
 		_, err = worktree.Add("main.go")

@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/nnutter/commitstack"
 	"github.com/spf13/cobra"
 
 	"github.com/nnutter/tillit/internal/auditor"
 	"github.com/nnutter/tillit/internal/daemon"
-	"github.com/nnutter/tillit/internal/repository"
 	"github.com/nnutter/tillit/internal/verifier"
 )
 
@@ -54,7 +54,7 @@ func printDaemon(cmd *cobra.Command, repo string) error {
 	return err
 }
 
-func branchVerification(cmd *cobra.Command, repo string, snapshot repository.BranchSnapshot) (verifier.BranchResult, error) {
+func branchVerification(cmd *cobra.Command, repo string, snapshot commitstack.Snapshot) (verifier.BranchResult, error) {
 	result, err := verifier.ReportBranch(cmd.Context(), repo)
 	if err != nil {
 		return result, fmt.Errorf("report verification: %w", err)
@@ -65,17 +65,17 @@ func branchVerification(cmd *cobra.Command, repo string, snapshot repository.Bra
 	return result, nil
 }
 
-func sameSnapshot(a, b repository.BranchSnapshot) bool {
-	if a.Ref != b.Ref {
+func sameSnapshot(a, b commitstack.Snapshot) bool {
+	if a.Branch != b.Branch {
 		return false
 	}
-	if a.Tip != b.Tip {
+	if a.Head != b.Head {
 		return false
 	}
-	if a.Boundary != b.Boundary {
+	if a.Base != b.Base {
 		return false
 	}
-	return slices.Equal(a.Commits, b.Commits)
+	return slices.EqualFunc(a.Stacks, b.Stacks, commitstack.SameStack)
 }
 
 func printBranch(cmd *cobra.Command, branch auditor.BranchResult, verification verifier.BranchResult) error {

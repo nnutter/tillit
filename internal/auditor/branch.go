@@ -11,12 +11,15 @@ import (
 
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
+	"github.com/nnutter/commitstack"
 
 	"github.com/nnutter/tillit/internal/config"
 	"github.com/nnutter/tillit/internal/repository"
 )
 
-// BranchOutcome describes the validation of an original branch commit.
+// BranchOutcome describes the validation of a commit stack. Hash is the
+// stack tip: the commit that contains the stack's original commit and all of
+// its attached fixups.
 type BranchOutcome struct {
 	Hash     string    `json:"commit"`
 	Subject  string    `json:"subject"`
@@ -25,16 +28,16 @@ type BranchOutcome struct {
 	Evidence *Evidence `json:"evidence,omitzero"`
 }
 
-// BranchResult ties outcomes to the branch snapshot that selected them.
+// BranchResult ties one outcome per stack to the snapshot that selected them.
 type BranchResult struct {
-	Snapshot repository.BranchSnapshot
+	Snapshot commitstack.Snapshot
 	Outcomes []BranchOutcome
 }
 
 // ValidateBranch validates a fixed branch snapshot without modifying its commits.
 // Callers must serialize it with other operations using the Tillit checkout.
 func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) {
-	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
+	snapshot, err := repository.SnapshotStacks(ctx, repoPath)
 	if err != nil {
 		return BranchResult{}, err
 	}
@@ -56,15 +59,15 @@ func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) 
 		return BranchResult{}, err
 	}
 	result := BranchResult{Snapshot: snapshot}
-	for _, hash := range snapshot.Commits {
+	for _, stack := range snapshot.Stacks {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		commit, err := repo.CommitObject(plumbing.NewHash(hash))
+		commit, err := repo.CommitObject(plumbing.NewHash(stack.Tip))
 		if err != nil {
 			return result, err
 		}
-		outcome := BranchOutcome{Hash: hash, Subject: subjectOf(commit.Message)}
+		outcome := BranchOutcome{Hash: stack.Tip, Subject: stack.Subject}
 		outcome, err = validateBranchCommit(ctx, db, gitDir, dest, commit, outcome)
 		if err != nil {
 			return result, err

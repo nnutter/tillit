@@ -26,6 +26,9 @@ func TestBranchVerificationRetriesReportedError(t *testing.T) {
 	writeTestFile(t, repo, "a.go", "package p\nfunc f() int { var value = 1; return value }\n")
 	gitTest(t, repo, "add", ".")
 	gitTest(t, repo, "commit", "-qm", "rename")
+	// Warm the stack patch cache so only verification needs the hidden blob.
+	_, err := verifier.ReportBranch(t.Context(), repo)
+	require.NoError(t, err)
 	blob := gitTest(t, repo, "rev-parse", "HEAD:a.go")
 	object := filepath.Join(repo, ".git", "objects", blob[:2], blob[2:])
 	hidden := filepath.Join(t.TempDir(), "blob")

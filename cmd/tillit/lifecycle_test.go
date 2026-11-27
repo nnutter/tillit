@@ -209,6 +209,8 @@ func newLifecycleRepo(t *testing.T, env []string) string {
 	baseCommit := git("rev-parse", "HEAD")
 	git("update-ref", "refs/remotes/origin/main", baseCommit)
 	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	git("config", "branch.feature.remote", ".")
+	git("config", "branch.feature.merge", "refs/remotes/origin/main")
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c","echo validation-output; exit 0"]}}}`, "/bin/sh")), 0o644))
 	git("add", ".tillit/config.json")

@@ -59,8 +59,8 @@ func makeReport(result auditor.BranchResult) report {
 		summary[commit.State]++
 	}
 	return report{
-		Version: 1, Branch: result.Snapshot.Ref, Tip: result.Snapshot.Tip,
-		Boundary: result.Snapshot.Boundary, Summary: summary, Commits: result.Outcomes,
+		Version: 1, Branch: result.Snapshot.Branch, Tip: result.Snapshot.Head,
+		Boundary: result.Snapshot.Base, Summary: summary, Commits: result.Outcomes,
 	}
 }
 
