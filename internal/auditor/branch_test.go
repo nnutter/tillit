@@ -9,13 +9,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/auditor"
 	"github.com/nnutter/tillit/internal/repository"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
@@ -27,6 +28,8 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 	base := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
 	runGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	runGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	runGit(t, dir, "config", "branch.feature.remote", ".")
+	runGit(t, dir, "config", "branch.feature.merge", "refs/remotes/origin/main")
 	script := filepath.Join(t.TempDir(), "check")
 	data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{script}}}})
 	require.NoError(t, err)
@@ -66,7 +69,7 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 }
 
 func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	dir := t.TempDir()
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
@@ -78,6 +81,8 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	base := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
 	runGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
 	runGit(t, dir, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	runGit(t, dir, "config", "branch.feature.remote", ".")
+	runGit(t, dir, "config", "branch.feature.merge", "refs/remotes/origin/main")
 	log := filepath.Join(t.TempDir(), "log")
 	script := filepath.Join(t.TempDir(), "check")
 	writeFile(t, script, "#!/bin/sh\nprintf '%s %s %s\\n' \"$(git rev-parse HEAD)\" \"$PWD\" \"$1\" >> \""+log+"\"\n[ \"$1\" != fail ]\n")
@@ -90,11 +95,11 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 		require.NoError(t, os.WriteFile(configPath, data, 0o644))
 		runGit(t, dir, "add", ".tillit/config.json")
 	}
-	writeBranchConfig("fail")
-	runGit(t, dir, "commit", "-m", "fails")
-	first := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
 	writeBranchConfig("pass")
 	runGit(t, dir, "commit", "-m", "passes")
+	first := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	writeBranchConfig("fail")
+	runGit(t, dir, "commit", "-m", "fails")
 	second := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
 	linked := filepath.Join(t.TempDir(), "linked")
 	runGit(t, dir, "checkout", "--detach", base)
@@ -103,18 +108,19 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	before := runGit(t, linked, "status", "--porcelain")
 	report, err := auditor.ReportBranch(t.Context(), linked)
 	require.NoError(t, err)
-	require.Equal(t, []auditor.BranchOutcome{{Hash: first, Subject: "fails", State: "pending"}, {Hash: second, Subject: "passes", State: "pending"}}, report.Outcomes)
+	require.Equal(t, []auditor.BranchOutcome{{Hash: first, Subject: "passes", State: "pending"}, {Hash: second, Subject: "fails", State: "pending"}}, report.Outcomes)
 	_, err = os.Stat(log)
 	require.ErrorIs(t, err, os.ErrNotExist)
 	result, err := auditor.ValidateBranch(t.Context(), linked)
 	require.NoError(t, err)
-	require.Equal(t, second, result.Snapshot.Tip)
-	require.Equal(t, []auditor.BranchOutcome{{Hash: first, Subject: "fails", State: "failed", Error: "validation command failed"}, {Hash: second, Subject: "passes", State: "passed"}}, result.Outcomes)
+	require.Equal(t, second, result.Snapshot.Head)
+	require.Equal(t, []auditor.BranchOutcome{{Hash: first, Subject: "passes", State: "passed"}, {Hash: second, Subject: "fails", State: "failed", Error: "validation command failed"}}, result.Outcomes)
 	lines := logLines(t, log)
 	require.Len(t, lines, 2)
 	require.Contains(t, lines[0], first+" ")
-	require.Contains(t, lines[0], " fail")
+	require.Contains(t, lines[0], " pass")
 	require.Contains(t, lines[1], second+" ")
+	require.Contains(t, lines[1], " fail")
 	require.NotContains(t, lines[0], linked)
 	gitDir := strings.TrimSpace(runGit(t, linked, "rev-parse", "--absolute-git-dir"))
 	dest, err := repository.CheckoutDir(gitDir)
@@ -172,4 +178,32 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "passed", result.Outcomes[3].State)
 	require.Len(t, logLines(t, log), 4)
+}
+
+func TestReportBranchGroupsFixupsIntoOneStack(t *testing.T) {
+	gittest.WithSetenvEnviron(t)
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	runGit(t, dir, "init", "-b", "feature")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "commit", "--allow-empty", "-m", "base")
+	base := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	runGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
+	runGit(t, dir, "config", "branch.feature.remote", ".")
+	runGit(t, dir, "config", "branch.feature.merge", "refs/remotes/origin/main")
+	writeFile(t, filepath.Join(dir, "a.txt"), "one\n")
+	runGit(t, dir, "add", ".")
+	runGit(t, dir, "commit", "-m", "add a")
+	writeFile(t, filepath.Join(dir, "a.txt"), "two\n")
+	runGit(t, dir, "commit", "-a", "-m", "fixup! add a")
+	tip := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+
+	report, err := auditor.ReportBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Len(t, report.Outcomes, 1)
+	require.Equal(t, tip, report.Outcomes[0].Hash)
+	require.Equal(t, "add a", report.Outcomes[0].Subject)
 }

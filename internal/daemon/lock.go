@@ -49,28 +49,29 @@ func Running(repoPath string) (bool, error) {
 	return false, err
 }
 
-func acquireWorktreeLock(repoPath string) (*os.File, error) {
-	_, gitDir, err := repository.Open(repoPath)
+func acquireWorktreeLock(repoPath string) (*os.File, string, error) {
+	repo, gitDir, err := repository.Open(repoPath)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
+	_ = repo.Close()
 	lockPath, err := worktreeLockPath(gitDir)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
 		_ = f.Close()
 		if errors.Is(err, syscall.EWOULDBLOCK) || errors.Is(err, syscall.EAGAIN) {
-			return nil, fmt.Errorf("%w: worktree %s lock %s", ErrAlreadyRunning, gitDir, lockPath)
+			return nil, "", fmt.Errorf("%w: worktree %s lock %s", ErrAlreadyRunning, gitDir, lockPath)
 		}
-		return nil, err
+		return nil, "", err
 	}
 	_ = f.Truncate(0)
 	_, _ = f.Seek(0, 0)
@@ -79,10 +80,14 @@ func acquireWorktreeLock(repoPath string) (*os.File, error) {
 		_ = err
 	}
 	_ = f.Sync()
-	return f, nil
+	writeDaemonVersion(gitDir)
+	return f, gitDir, nil
 }
 
-func releaseWorktreeLock(f *os.File) {
+func releaseWorktreeLock(f *os.File, gitDir string) {
+	if gitDir != "" {
+		removeDaemonVersion(gitDir)
+	}
 	if f == nil {
 		return
 	}

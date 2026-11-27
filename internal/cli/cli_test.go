@@ -12,14 +12,16 @@ import (
 	"time"
 
 	"github.com/go-git/go-git/v6"
+	gitconfig "github.com/go-git/go-git/v6/config"
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/auditor"
 	"github.com/nnutter/tillit/internal/cli"
 	"github.com/nnutter/tillit/internal/daemon"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestStatusShowsEveryBranchCommit(t *testing.T) {
@@ -37,9 +39,101 @@ func TestStatusShowsEveryBranchCommit(t *testing.T) {
 	require.NoError(t, err)
 	second, err := wt.Commit("later pending", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
 	require.NoError(t, err)
-	out := execute(t, dir, "status")
+	out := execute(t, dir, "status", "--simple")
+	require.Contains(t, out, "daemon: stopped")
 	require.Contains(t, out, first.String()+" first failure failed")
 	require.Contains(t, out, second.String()+" later pending pending")
+	running, err := daemon.Running(dir)
+	require.NoError(t, err)
+	require.False(t, running)
+}
+
+func TestStatusJSON(t *testing.T) {
+	dir := cleanRepo(t)
+	writeConfig(t, dir, []string{"false"}, "")
+	repo, err := git.PlainOpen(dir)
+	require.NoError(t, err)
+	defer func() { _ = repo.Close() }()
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	sig := &object.Signature{Name: "Test", Email: "test@example.com", When: time.Now()}
+	first, err := wt.Commit("first failure", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
+	require.NoError(t, err)
+	_, err = auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	second, err := wt.Commit("later pending", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
+	require.NoError(t, err)
+
+	out := execute(t, dir, "status", "--json")
+	var report struct {
+		Version  int    `json:"version"`
+		Daemon   string `json:"daemon"`
+		Branch   string `json:"branch"`
+		Tip      string `json:"tip"`
+		Boundary string `json:"boundary"`
+		Summary  struct {
+			Validation   map[string]int `json:"validation"`
+			Verification map[string]int `json:"verification"`
+		} `json:"summary"`
+		Commits []struct {
+			Commit       string `json:"commit"`
+			Subject      string `json:"subject"`
+			Validation   string `json:"validation"`
+			Verification struct {
+				Status string `json:"status"`
+			} `json:"verification"`
+		} `json:"commits"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	require.Equal(t, 1, report.Version)
+	require.Equal(t, "stopped", report.Daemon)
+	require.Equal(t, second.String(), report.Tip)
+	require.Equal(t, 1, report.Summary.Validation["failed"])
+	require.Equal(t, 1, report.Summary.Validation["pending"])
+	require.Equal(t, 2, report.Summary.Verification["pending"])
+	require.Len(t, report.Commits, 2)
+	require.Equal(t, first.String(), report.Commits[0].Commit)
+	require.Equal(t, "failed", report.Commits[0].Validation)
+	require.Equal(t, "pending", report.Commits[0].Verification.Status)
+	require.Equal(t, second.String(), report.Commits[1].Commit)
+	require.Equal(t, "pending", report.Commits[1].Validation)
+	running, err := daemon.Running(dir)
+	require.NoError(t, err)
+	require.False(t, running)
+}
+
+func TestStatusShowsDaemonNeedsRestart(t *testing.T) {
+	dir := cleanRepo(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- daemon.Run(ctx, dir) }()
+	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
+
+	require.Eventually(t, func() bool {
+		state, err := daemon.Status(dir)
+		if err != nil {
+			return false
+		}
+		if !state.Running {
+			return false
+		}
+		return !state.NeedsRestart
+	}, time.Second, 10*time.Millisecond)
+
+	versionPath := filepath.Join(dir, ".git", "tillit", "daemon.version")
+	require.NoError(t, os.WriteFile(versionPath, []byte("stale-fingerprint\n"), 0o600))
+
+	simple := execute(t, dir, "status", "--simple")
+	require.Contains(t, simple, "daemon: running (needs restart)")
+
+	rawJSON := execute(t, dir, "status", "--json")
+	var report struct {
+		Daemon             string `json:"daemon"`
+		DaemonNeedsRestart bool   `json:"daemon_needs_restart"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(rawJSON), &report))
+	require.Equal(t, "running", report.Daemon)
+	require.True(t, report.DaemonNeedsRestart)
 }
 
 func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
@@ -65,7 +159,7 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 			require.NoError(t, err)
 			mixed, err := wt.Commit("other change", &git.CommitOptions{Author: sig})
 			require.NoError(t, err)
-			before := execute(t, dir, "status")
+			before := execute(t, dir, "status", "--no-start")
 			require.Contains(t, before, rename.String()+" rename")
 			require.Contains(t, before, "verification: pending")
 			ctx, cancel := context.WithCancel(t.Context())
@@ -75,18 +169,21 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 			var out string
 			ok := false
 			for range 100 {
-				out, err = runCLI(t, dir, "status")
-				if err == nil && strings.Contains(out, "verification: verified") && strings.Contains(out, "verification: unsupported: commit must modify exactly one file") {
+				out, err = runCLI(t, dir, "status", "--no-start")
+				if err == nil && strings.Contains(out, "verification: verified") && strings.Contains(out, "verification: bypassed: commit must modify exactly one file") {
 					ok = true
 					break
 				}
 				time.Sleep(100 * time.Millisecond)
 			}
 			require.True(t, ok, "status: %s; error: %v", out, err)
-			out = execute(t, dir, "status")
+			out = execute(t, dir, "status", "--no-start")
 			require.Contains(t, out, mixed.String()+" other change")
 			if configured {
-				require.Contains(t, out, rename.String()+" rename failed")
+				require.Eventually(t, func() bool {
+					out = execute(t, dir, "status", "--no-start")
+					return strings.Contains(out, rename.String()+" rename failed")
+				}, 10*time.Second, 100*time.Millisecond, "status: %s", out)
 			} else {
 				require.Contains(t, out, "validate command is not configured")
 			}
@@ -140,7 +237,7 @@ func cleanRepo(t *testing.T) string {
 
 func initRepo(t *testing.T, committed, staged []byte) string {
 	t.Helper()
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	t.Setenv("HOME", t.TempDir())
 	dir := t.TempDir()
 	repo, err := git.PlainInit(dir, false)
@@ -163,6 +260,8 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 	require.NoError(t, err)
 	require.NoError(t, repo.Storer.SetReference(plumbing.NewHashReference("refs/remotes/origin/main", base)))
 	require.NoError(t, repo.Storer.SetReference(plumbing.NewSymbolicReference("refs/remotes/origin/HEAD", "refs/remotes/origin/main")))
+	cfg.Branches["master"] = &gitconfig.Branch{Name: "master", Remote: ".", Merge: "refs/remotes/origin/main"}
+	require.NoError(t, repo.SetConfig(cfg))
 	if !bytes.Equal(committed, staged) {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, "main.go"), staged, 0o644))
 		_, err = worktree.Add("main.go")

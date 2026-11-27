@@ -14,14 +14,15 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/repository"
-	"github.com/nnutter/tillit/internal/testutil"
 )
 
 func TestDetachedDaemonLifecycle(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	bin := filepath.Join(t.TempDir(), "tillit")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
+	build := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
 	require.NoError(t, err, "%s", buildOut)
 	home := t.TempDir()
@@ -105,7 +106,7 @@ func checkForeground(t *testing.T, bin, repo string, env []string, interrupt boo
 	result := make(chan error, 1)
 	go func() { result <- cmd.Wait() }()
 	status := func() string {
-		check := exec.CommandContext(t.Context(), bin, "--repo", repo, "status")
+		check := exec.CommandContext(t.Context(), bin, "--repo", repo, "status", "--no-start")
 		check.Env = env
 		out, _ := check.CombinedOutput()
 		return string(out)
@@ -131,9 +132,9 @@ func checkForeground(t *testing.T, bin, repo string, env []string, interrupt boo
 }
 
 func TestStopKillStopsValidationDescendants(t *testing.T) {
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	bin := filepath.Join(t.TempDir(), "tillit")
-	build := exec.CommandContext(t.Context(), "go", "build", "-o", bin, ".")
+	build := exec.CommandContext(t.Context(), "go", "build", "-buildvcs=false", "-o", bin, ".")
 	buildOut, err := build.CombinedOutput()
 	require.NoError(t, err, "%s", buildOut)
 	home := t.TempDir()
@@ -208,6 +209,8 @@ func newLifecycleRepo(t *testing.T, env []string) string {
 	baseCommit := git("rev-parse", "HEAD")
 	git("update-ref", "refs/remotes/origin/main", baseCommit)
 	git("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+	git("config", "branch.feature.remote", ".")
+	git("config", "branch.feature.merge", "refs/remotes/origin/main")
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c","echo validation-output; exit 0"]}}}`, "/bin/sh")), 0o644))
 	git("add", ".tillit/config.json")

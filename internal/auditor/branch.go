@@ -9,14 +9,20 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/object"
+	"github.com/nnutter/commitstack"
 
 	"github.com/nnutter/tillit/internal/config"
 	"github.com/nnutter/tillit/internal/repository"
 )
 
-// BranchOutcome describes the validation of an original branch commit.
+type repoType = *git.Repository
+
+// BranchOutcome describes the validation of a commit stack. Hash is the
+// stack tip: the commit that contains the stack's original commit and all of
+// its attached fixups.
 type BranchOutcome struct {
 	Hash     string    `json:"commit"`
 	Subject  string    `json:"subject"`
@@ -25,79 +31,119 @@ type BranchOutcome struct {
 	Evidence *Evidence `json:"evidence,omitzero"`
 }
 
-// BranchResult ties outcomes to the branch snapshot that selected them.
+// BranchResult ties one outcome per stack to the snapshot that selected them.
 type BranchResult struct {
-	Snapshot repository.BranchSnapshot
+	Snapshot commitstack.Snapshot
 	Outcomes []BranchOutcome
 }
 
 // ValidateBranch validates a fixed branch snapshot without modifying its commits.
 // Callers must serialize it with other operations using the Tillit checkout.
 func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) {
-	snapshot, err := repository.SnapshotBranch(ctx, repoPath)
-	if err != nil {
-		return BranchResult{}, err
-	}
-	repo, gitDir, err := repository.Open(repoPath)
+	snapshot, repo, gitDir, dest, db, err := openValidation(ctx, repoPath)
 	if err != nil {
 		return BranchResult{}, err
 	}
 	defer func() { _ = repo.Close() }()
+	defer func() { _ = db.Close() }()
+	return validateSnapshot(ctx, snapshot, repo, gitDir, dest, db)
+}
+
+func openValidation(ctx context.Context, repoPath string) (commitstack.Snapshot, repoType, string, string, statedb, error) {
+	snapshot, err := repository.SnapshotStacks(ctx, repoPath)
+	if err != nil {
+		return snapshot, nil, "", "", statedb{}, err
+	}
+	repo, gitDir, err := repository.Open(repoPath)
+	if err != nil {
+		return snapshot, nil, "", "", statedb{}, err
+	}
 	dest, err := repository.CheckoutDir(gitDir)
 	if err != nil {
-		return BranchResult{}, err
+		_ = repo.Close()
+		return snapshot, nil, "", "", statedb{}, err
 	}
 	db, err := openState(ctx, gitDir)
 	if err != nil {
-		return BranchResult{}, err
+		_ = repo.Close()
+		return snapshot, nil, "", "", statedb{}, err
 	}
-	defer func() { _ = db.Close() }()
 	if err := ensureBranchValidation(ctx, db.DB); err != nil {
-		return BranchResult{}, err
+		_ = repo.Close()
+		_ = db.Close()
+		return snapshot, nil, "", "", statedb{}, err
 	}
+	return snapshot, repo, gitDir, dest, db, nil
+}
+
+func validateSnapshot(ctx context.Context, snapshot commitstack.Snapshot, repo repoType, gitDir, dest string, db statedb) (BranchResult, error) {
 	result := BranchResult{Snapshot: snapshot}
-	for _, hash := range snapshot.Commits {
+	for i, stack := range snapshot.Stacks {
 		if err := ctx.Err(); err != nil {
 			return result, err
 		}
-		commit, err := repo.CommitObject(plumbing.NewHash(hash))
+		commit, err := repo.CommitObject(plumbing.NewHash(stack.Tip))
 		if err != nil {
 			return result, err
 		}
-		outcome := BranchOutcome{Hash: hash, Subject: subjectOf(commit.Message)}
-		outcome, err = validateBranchCommit(ctx, db, gitDir, dest, commit, outcome)
+		outcome := BranchOutcome{Hash: stack.Tip, Subject: stack.Subject}
+		outcome, wasCached, err := validateBranchCommit(ctx, db, gitDir, dest, commit, outcome)
 		if err != nil {
 			return result, err
 		}
 		result.Outcomes = append(result.Outcomes, outcome)
+		if shouldStopOnFailure(wasCached, outcome.State) {
+			fillRemainingPending(snapshot, i, &result)
+			break
+		}
 	}
 	return result, nil
 }
 
-func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, commit *object.Commit, outcome BranchOutcome) (BranchOutcome, error) {
+func isFailedState(s string) bool { return s == "failed" }
+func isNotCached(b bool) bool     { return !b }
+func shouldStopOnFailure(wasCached bool, state string) bool {
+	return isNotCached(wasCached) && isFailedState(state)
+}
+
+func fillRemainingPending(snapshot commitstack.Snapshot, index int, result *BranchResult) {
+	for _, remaining := range snapshot.Stacks[index+1:] {
+		result.Outcomes = append(result.Outcomes, BranchOutcome{Hash: remaining.Tip, Subject: remaining.Subject, State: "pending"})
+	}
+}
+
+func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, commit *object.Commit, outcome BranchOutcome) (BranchOutcome, bool, error) {
 	data, err := historicalConfig(commit)
 	if err != nil {
-		return outcome, err
+		return outcome, false, err
 	}
 	cfg, err := config.LoadHistorical(gitDir, data)
 	if err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
-		return outcome, nil
+		return outcome, false, nil
 	}
 	if len(cfg.Command) == 0 {
 		outcome.State, outcome.Error = "error", ErrCommandNotConfigured.Error()
-		return outcome, nil
+		return outcome, false, nil
 	}
 	key, err := branchConfigKey(cfg)
 	if err != nil {
-		return outcome, err
+		return outcome, false, err
 	}
 	outcome, cached, err := cachedBranchOutcome(ctx, db, key, outcome)
 	if err != nil {
-		return outcome, err
+		return outcome, false, err
 	}
 	if cached {
-		return outcome, nil
+		return outcome, true, nil
+	}
+	// Persist a transient "running" state so tillit status shows progress
+	// instead of "pending" while the command executes.
+	outcome.State = "running"
+	outcome.Error = ""
+	outcome.Evidence = nil
+	if err := recordBranchOutcome(ctx, db.DB, key, outcome); err != nil {
+		return outcome, false, fmt.Errorf("record running validation: %w", err)
 	}
 	if err := prepareBranchCheckout(ctx, gitDir, dest, outcome.Hash); err != nil {
 		outcome.State, outcome.Error = "error", err.Error()
@@ -105,9 +151,10 @@ func validateBranchCommit(ctx context.Context, db statedb, gitDir, dest string, 
 		outcome = runBranchCommand(ctx, gitDir, cfg.Command, outcome)
 	}
 	if ctx.Err() != nil {
-		return outcome, ctx.Err()
+		return outcome, false, ctx.Err()
 	}
-	return finishBranchValidation(ctx, db, gitDir, dest, key, outcome)
+	finished, err := finishBranchValidation(ctx, db, gitDir, dest, key, outcome)
+	return finished, false, err
 }
 
 func finishBranchValidation(ctx context.Context, db statedb, gitDir, dest, key string, outcome BranchOutcome) (BranchOutcome, error) {
@@ -139,13 +186,19 @@ func recordReproductions(ctx context.Context, db statedb, gitDir, dest, key stri
 	return nil
 }
 
+func isNotError(s string) bool   { return s != "error" }
+func isNotRunning(s string) bool { return s != "running" }
+func isCachedState(s string) bool {
+	return isNotError(s) && isNotRunning(s)
+}
+
 func cachedBranchOutcome(ctx context.Context, db statedb, key string, outcome BranchOutcome) (BranchOutcome, bool, error) {
 	err := readBranchOutcome(ctx, db.DB, false, key, &outcome)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return outcome, false, err
 	}
 	if err == nil {
-		if outcome.State != "error" {
+		if isCachedState(outcome.State) {
 			return outcome, true, nil
 		}
 	}

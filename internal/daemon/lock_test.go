@@ -3,6 +3,7 @@ package daemon_test
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -94,4 +95,46 @@ func lockExists(t *testing.T, repoPath string) bool {
 	}
 	_, err = os.Stat(checkout + ".lock")
 	return err == nil
+}
+
+func TestStatusDetectsOutOfSyncDaemon(t *testing.T) {
+	dir := newRepo(t)
+
+	before, err := daemon.Status(dir)
+	require.NoError(t, err)
+	require.False(t, before.Running)
+	require.False(t, before.NeedsRestart)
+
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- daemon.Run(ctx, dir) }()
+	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
+
+	require.Eventually(t, func() bool {
+		state, err := daemon.Status(dir)
+		if err != nil {
+			return false
+		}
+		return state.Running
+	}, time.Second, 10*time.Millisecond)
+
+	state, err := daemon.Status(dir)
+	require.NoError(t, err)
+	require.True(t, state.Running)
+	require.False(t, state.NeedsRestart)
+
+	// Simulate an older daemon binary by overwriting daemon.version.
+	versionPath := filepath.Join(dir, ".git", "tillit", "daemon.version")
+	require.NoError(t, os.WriteFile(versionPath, []byte("stale-fingerprint\n"), 0o600))
+	state, err = daemon.Status(dir)
+	require.NoError(t, err)
+	require.True(t, state.Running)
+	require.True(t, state.NeedsRestart)
+
+	// Missing daemon.version (e.g. daemon started before version tracking) also needs restart.
+	require.NoError(t, os.Remove(versionPath))
+	state, err = daemon.Status(dir)
+	require.NoError(t, err)
+	require.True(t, state.Running)
+	require.True(t, state.NeedsRestart)
 }

@@ -1,0 +1,265 @@
+package status
+
+import (
+	json "encoding/json/v2"
+	"fmt"
+	"io"
+	"strings"
+
+	"charm.land/bubbles/v2/table"
+	"charm.land/lipgloss/v2"
+
+	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
+	"github.com/nnutter/tillit/internal/ui"
+	"github.com/nnutter/tillit/internal/verifier"
+)
+
+// renderStatic writes the non-interactive status view.
+//
+// When theme.ColorEnabled is true the view is drawn with lipgloss
+// styling, tables and semantic colors. When false (piped or tests)
+// it falls back to a plain, greppable format that still contains
+// the historical substrings (hash + subject + state and
+// "verification: ..." ).
+func renderStatic(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) error {
+	if theme.ColorEnabled {
+		return renderColor(w, branch, verification, daemonState, theme)
+	}
+	return renderPlain(w, branch, verification, daemonState, theme)
+}
+
+func renderPlain(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) error {
+	// Header - plain but improved over the historic single line.
+	// Keep historics: "daemon: running" substring is produced.
+	// Use theme (which is plain) for consistent rendering.
+	var b strings.Builder
+
+	// Title
+	b.WriteString("Tillit\n")
+	b.WriteString(strings.Repeat("=", 30) + "\n")
+
+	// Daemon line - keep legacy "daemon:" prefix for compatibility.
+	fmt.Fprintf(&b, "daemon: %s\n", theme.DaemonBadge(daemonState.Running, daemonState.NeedsRestart))
+
+	// Branch info
+	if len(branch.Snapshot.Branch) > 0 {
+		fmt.Fprintf(&b, "branch: %s\n", branch.Snapshot.Branch)
+		// Tip and boundary are helpful for debugging.
+		if branch.Snapshot.Head != "" {
+			fmt.Fprintf(&b, "head: %s\n", branch.Snapshot.Head)
+		}
+		if branch.Snapshot.Base != "" {
+			fmt.Fprintf(&b, "base: %s\n", branch.Snapshot.Base)
+		}
+	}
+	b.WriteString("\n")
+
+	// Summary - plain counts, helpful scanning.
+	// This replaces invisible counts previously. Always printed.
+	summary := plainSummary(branch, verification)
+	b.WriteString(summary)
+	b.WriteString("\n\n")
+
+	// Commits - one per line, plain, preserving historic triple.
+	// Format: "<hash> <subject> <state> | verification: <verif>"
+	// Plus optional error suffix after state.
+	// This is intentionally not a table so that the triple
+	// "hash subject state" remains greppable as before.
+	byHash := make(map[string]verifier.BranchOutcome, len(verification.Outcomes))
+	for _, out := range verification.Outcomes {
+		byHash[out.Hash] = out
+	}
+	for _, item := range branch.Outcomes {
+		verif := plainVerification(byHash[item.Hash])
+		line := fmt.Sprintf("%s %s %s", item.Hash, item.Subject, item.State)
+		if item.Error != "" {
+			line = fmt.Sprintf("%s: %s", line, item.Error)
+		}
+		line = fmt.Sprintf("%s | verification: %s", line, verif)
+		b.WriteString(line + "\n")
+	}
+	if len(branch.Outcomes) == 0 {
+		b.WriteString("No commits selected for this branch.\n")
+	}
+
+	_, err := io.WriteString(w, b.String())
+	return err
+}
+
+func plainSummary(branch auditor.BranchResult, verification verifier.BranchResult) string {
+	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
+	verified, rejected, bypassed, vpending, verr := countVerification(verification.Outcomes)
+	return fmt.Sprintf("summary: %d commits — validation: %d passed, %d failed, %d pending, %d running, %d error  •  verification: %d verified, %d rejected, %d bypassed, %d pending, %d error",
+		len(branch.Outcomes), passed, failed, pending, running, errCount, verified, rejected, bypassed, vpending, verr)
+}
+
+func plainVerification(out verifier.BranchOutcome) string {
+	if out.Error != "" {
+		return "error: " + out.Error
+	}
+	if out.Result == nil {
+		return "pending"
+	}
+	state := string(out.Result.Status)
+	if out.Result.Reason != "" {
+		state += ": " + out.Result.Reason
+	}
+	return state
+}
+
+// renderColor draws the full styled view (TTY or forced color).
+// It uses bubble's table component for commits, lipgloss for header
+// and daemon badges, and the semantic theme for state colors.
+func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) error {
+	var b strings.Builder
+
+	// Title on its own line.
+	b.WriteString(theme.Title.Render("Tillit"))
+	b.WriteString("\n")
+
+	// Branch + daemon metadata line.
+	daemonStr := theme.DaemonBadge(daemonState.Running, daemonState.NeedsRestart)
+	daemonLine := fmt.Sprintf("daemon: %s", daemonStr)
+	if theme.ColorEnabled {
+		prefix := theme.BranchInfo.Render("Daemon:")
+		daemonLine = lipgloss.JoinHorizontal(lipgloss.Left,
+			prefix, " ", daemonStr,
+		)
+	}
+	if len(branch.Snapshot.Branch) > 0 {
+		branchLine := fmt.Sprintf("Branch: %s   Head: %s   Base: %s",
+			branch.Snapshot.Branch,
+			ui.ShortHash(branch.Snapshot.Head),
+			ui.ShortHash(branch.Snapshot.Base),
+		)
+		b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, theme.BranchInfo.Render(branchLine), "   ", daemonLine))
+	} else {
+		b.WriteString(daemonLine)
+	}
+	b.WriteString("\n\n")
+
+	b.WriteString(buildSummary(branch, verification, theme))
+	b.WriteString("\n\n")
+
+	// Table for commits - bubbles/table.
+	cols, rows := buildTableData(branch, verification, theme, -1, defaultTableWidth)
+	t := table.New(
+		table.WithColumns(cols),
+		table.WithRows(rows),
+		table.WithWidth(80),
+		table.WithHeight(min(20, len(rows)+6)),
+		table.WithFocused(false),
+		table.WithStyles(tableStyles(theme)),
+	)
+	// Table header is already styled via tableStyles.
+	b.WriteString(t.View())
+	b.WriteString("\n\n")
+
+	// Footer hint - help style.
+	helpLine := theme.Help.Render("Tip: navigate with ↑/↓ when interactive  •  q to quit (TUI)  •  tillit feedback --json for details")
+	b.WriteString(helpLine)
+	b.WriteString("\n")
+
+	// Document padding.
+	content := theme.Document.Render(b.String())
+	_, err := io.WriteString(w, content)
+	return err
+}
+
+type statusReport struct {
+	Version            int            `json:"version"`
+	Daemon             string         `json:"daemon"`
+	DaemonNeedsRestart bool           `json:"daemon_needs_restart,omitzero"`
+	Branch             string         `json:"branch"`
+	Tip                string         `json:"tip"`
+	Boundary           string         `json:"boundary"`
+	Summary            statusSummary  `json:"summary"`
+	Commits            []statusCommit `json:"commits"`
+}
+
+type statusSummary struct {
+	Validation   map[string]int `json:"validation"`
+	Verification map[string]int `json:"verification"`
+}
+
+type statusCommit struct {
+	Hash         string             `json:"commit"`
+	Subject      string             `json:"subject"`
+	Validation   string             `json:"validation"`
+	Error        string             `json:"error,omitempty"`
+	Verification statusVerification `json:"verification"`
+}
+
+type statusVerification struct {
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+func renderJSON(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State) error {
+	daemonLabel := "stopped"
+	needsRestart := false
+	if daemonState.Running {
+		daemonLabel = "running"
+		needsRestart = daemonState.NeedsRestart
+	}
+	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
+	verified, rejected, bypassed, vpending, verr := countVerification(verification.Outcomes)
+
+	byHash := make(map[string]verifier.BranchOutcome, len(verification.Outcomes))
+	for _, out := range verification.Outcomes {
+		byHash[out.Hash] = out
+	}
+
+	commits := make([]statusCommit, 0, len(branch.Outcomes))
+	for _, item := range branch.Outcomes {
+		commits = append(commits, statusCommit{
+			Hash:         item.Hash,
+			Subject:      item.Subject,
+			Validation:   item.State,
+			Error:        item.Error,
+			Verification: jsonVerification(byHash[item.Hash]),
+		})
+	}
+
+	rep := statusReport{
+		Version:            1,
+		Daemon:             daemonLabel,
+		DaemonNeedsRestart: needsRestart,
+		Branch:             branch.Snapshot.Branch,
+		Tip:                branch.Snapshot.Head,
+		Boundary:           branch.Snapshot.Base,
+		Summary: statusSummary{
+			Validation: map[string]int{
+				"passed":  passed,
+				"failed":  failed,
+				"pending": pending,
+				"running": running,
+				"error":   errCount,
+			},
+			Verification: map[string]int{
+				"verified": verified,
+				"rejected": rejected,
+				"bypassed": bypassed,
+				"pending":  vpending,
+				"error":    verr,
+			},
+		},
+		Commits: commits,
+	}
+	return json.MarshalWrite(w, rep)
+}
+
+func jsonVerification(out verifier.BranchOutcome) statusVerification {
+	if out.Error != "" {
+		return statusVerification{Status: "error", Error: out.Error}
+	}
+	if out.Result == nil {
+		return statusVerification{Status: "pending"}
+	}
+	return statusVerification{
+		Status: string(out.Result.Status),
+		Reason: out.Result.Reason,
+	}
+}

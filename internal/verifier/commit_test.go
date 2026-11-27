@@ -9,7 +9,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/nnutter/tillit/internal/testutil"
+	"github.com/nnutter/gittest"
+
 	"github.com/nnutter/tillit/internal/verifier"
 )
 
@@ -22,12 +23,12 @@ func TestVerifyCommit(t *testing.T) {
 		status           verifier.Status
 	}{
 		{"rename", map[string]string{"p/a.go": before}, map[string]string{"p/a.go": after}, verifier.Verified},
-		{"mixed", map[string]string{"p/a.go": before, "note": "a"}, map[string]string{"p/a.go": after, "note": "b"}, verifier.Unsupported},
-		{"sibling test", map[string]string{"p/a.go": before, "p/a_test.go": "package p"}, map[string]string{"p/a.go": after}, verifier.Unsupported},
-		{"sibling ignored", map[string]string{"p/a.go": before, "p/ignored.go": "//go:build ignore\n\npackage p"}, map[string]string{"p/a.go": after}, verifier.Unsupported},
-		{"two go files", map[string]string{"p/a.go": before, "p/b.go": before}, map[string]string{"p/a.go": after, "p/b.go": after}, verifier.Unsupported},
-		{"non go", map[string]string{"note": "a"}, map[string]string{"note": "b"}, verifier.Unsupported},
-		{"addition", map[string]string{"note": "a"}, map[string]string{"p/a.go": after}, verifier.Unsupported},
+		{"mixed", map[string]string{"p/a.go": before, "note": "a"}, map[string]string{"p/a.go": after, "note": "b"}, verifier.Bypassed},
+		{"sibling test", map[string]string{"p/a.go": before, "p/a_test.go": "package p"}, map[string]string{"p/a.go": after}, verifier.Bypassed},
+		{"sibling ignored", map[string]string{"p/a.go": before, "p/ignored.go": "//go:build ignore\n\npackage p"}, map[string]string{"p/a.go": after}, verifier.Bypassed},
+		{"two go files", map[string]string{"p/a.go": before, "p/b.go": before}, map[string]string{"p/a.go": after, "p/b.go": after}, verifier.Bypassed},
+		{"non go", map[string]string{"note": "a"}, map[string]string{"note": "b"}, verifier.Bypassed},
+		{"addition", map[string]string{"note": "a"}, map[string]string{"p/a.go": after}, verifier.Bypassed},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,19 +68,19 @@ func TestVerifyCommit(t *testing.T) {
 			require.Equal(t, hash, gitTest(t, repo, "rev-parse", "HEAD"))
 			rootResult, err := verifier.VerifyCommit(t.Context(), repo, root)
 			require.NoError(t, err)
-			require.Equal(t, verifier.Unsupported, rootResult.Status)
+			require.Equal(t, verifier.Bypassed, rootResult.Status)
 			tree := gitTest(t, repo, "rev-parse", hash+"^{tree}")
 			merge := gitTest(t, repo, "commit-tree", tree, "-p", root, "-p", hash, "-m", "merge")
 			mergeResult, err := verifier.VerifyCommit(t.Context(), repo, merge)
 			require.NoError(t, err)
-			require.Equal(t, verifier.Unsupported, mergeResult.Status)
+			require.Equal(t, verifier.Bypassed, mergeResult.Status)
 		})
 	}
 }
 
 func gitTest(t *testing.T, repo string, args ...string) string {
 	t.Helper()
-	testutil.IsolateGit(t)
+	gittest.WithSetenvEnviron(t)
 	args = append([]string{"-C", repo, "-c", "core.hooksPath=/dev/null"}, args...)
 	cmd := exec.CommandContext(t.Context(), "git", args...)
 	cmd.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1", "GIT_CONFIG_GLOBAL=/dev/null", "GIT_AUTHOR_NAME=Test", "GIT_AUTHOR_EMAIL=test@example.com", "GIT_COMMITTER_NAME=Test", "GIT_COMMITTER_EMAIL=test@example.com")

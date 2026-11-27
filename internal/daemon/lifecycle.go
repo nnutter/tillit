@@ -3,6 +3,8 @@ package daemon
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -41,11 +43,27 @@ func lifecyclePaths(repoPath string) (string, string, string, error) {
 	if err != nil {
 		return "", "", "", err
 	}
-	socket := filepath.Join(gitDir, "tillit", "daemon.sock")
-	if len(socket) > maxSocketPath {
-		return "", "", "", fmt.Errorf("daemon socket path is too long: %s", socket)
-	}
+	socket := daemonSocketPath(gitDir)
 	return root, gitDir, socket, nil
+}
+
+// daemonSocketPath returns the daemon control socket path for a worktree.
+// The primary location is gitDir/tillit/daemon.sock, but Linux (and macOS)
+// limit sockaddr_un.sun_path to 108/104 bytes, so a very long worktree path
+// would exceed it. When the primary path would be too long, a short
+// deterministic hashed path under the system temp directory is used instead,
+// e.g. /tmp/tillit-<16hex>/daemon.sock, which Start/Stop both compute the
+// same way so they find each other without hitting the kernel limit.
+func daemonSocketPath(gitDir string) string {
+	primary := filepath.Join(gitDir, "tillit", "daemon.sock")
+	if len(primary) <= maxSocketPath {
+		return primary
+	}
+	sum := sha256.Sum256([]byte(gitDir))
+	short := hex.EncodeToString(sum[:8])
+	fallback := filepath.Join(os.TempDir(), "tillit-"+short, "daemon.sock")
+	_ = os.MkdirAll(filepath.Dir(fallback), 0o700)
+	return fallback
 }
 
 // Start launches a detached, supervised daemon and waits for readiness.
