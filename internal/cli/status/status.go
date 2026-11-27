@@ -35,7 +35,7 @@ semantic colors for every state (passed/failed/pending/running/error, verified/r
 The TUI auto-refreshes every 250ms (configurable with --interval) so that
 validation states transition pending → running → passed/failed without restart.
 Status starts the daemon automatically if it is not already running;
-use --no-start to disable auto-start.
+use --no-start to disable auto-start (--simple implies --no-start).
 In the TUI, select a commit and press <enter> to see its feedback in a pop-over
 (scroll with ↑/↓, esc/enter to close).
 `,
@@ -43,7 +43,7 @@ In the TUI, select a commit and press <enter> to see its feedback in a pop-over
 		RunE: run,
 	}
 	cmd.Flags().Bool("interactive", false, "force interactive TUI")
-	cmd.Flags().Bool("simple", false, "render plain text without TUI or colors")
+	cmd.Flags().Bool("simple", false, "render plain text without TUI or colors (implies --no-start)")
 	cmd.Flags().Duration("interval", 250*time.Millisecond, "refresh interval for interactive TUI")
 	cmd.Flags().Bool("no-start", false, "do not start the daemon if it is not already running")
 	return cmd
@@ -64,7 +64,7 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if shouldAutoStart(running, noStart) {
+	if shouldAutoStart(running, noStart, simpleFlag) {
 		running = ensureDaemon(cmd, repo)
 	}
 
@@ -101,10 +101,14 @@ func run(cmd *cobra.Command, _ []string) error {
 
 func shouldUseInteractive(a, b bool) bool { return isTruthy(a) || isTruthy(b) }
 func isTruthy(b bool) bool                { return b }
-func isNotRunning(b bool) bool            { return !b }
-func isNotNoStart(b bool) bool            { return !b }
-func shouldAutoStart(running, noStart bool) bool {
-	return isNotRunning(running) && isNotNoStart(noStart)
+func shouldAutoStart(running, noStart, simple bool) bool {
+	if running {
+		return false
+	}
+	if noStart {
+		return false
+	}
+	return !simple
 }
 
 func collectStatus(cmd *cobra.Command, repo string) (bool, auditor.BranchResult, verifier.BranchResult, error) {

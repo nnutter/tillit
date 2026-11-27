@@ -39,9 +39,13 @@ func TestStatusShowsEveryBranchCommit(t *testing.T) {
 	require.NoError(t, err)
 	second, err := wt.Commit("later pending", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
 	require.NoError(t, err)
-	out := execute(t, dir, "status", "--no-start")
+	out := execute(t, dir, "status", "--simple")
+	require.Contains(t, out, "daemon: stopped")
 	require.Contains(t, out, first.String()+" first failure failed")
 	require.Contains(t, out, second.String()+" later pending pending")
+	running, err := daemon.Running(dir)
+	require.NoError(t, err)
+	require.False(t, running)
 }
 
 func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
