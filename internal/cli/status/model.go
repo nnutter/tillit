@@ -93,10 +93,10 @@ func defaultKeyMap() KeyMap {
 // It periodically refreshes from the daemon so that pending/running states
 // transition to passed/failed without manual restart.
 type model struct {
-	theme         ui.Theme
-	branch        auditor.BranchResult
-	verification  verifier.BranchResult
-	daemonRunning bool
+	theme        ui.Theme
+	branch       auditor.BranchResult
+	verification verifier.BranchResult
+	daemon       daemon.State
 
 	repo     string
 	interval time.Duration
@@ -119,10 +119,10 @@ type model struct {
 }
 
 type refreshMsg struct {
-	branch        auditor.BranchResult
-	verification  verifier.BranchResult
-	daemonRunning bool
-	fetchErr      error
+	branch       auditor.BranchResult
+	verification verifier.BranchResult
+	daemon       daemon.State
+	fetchErr     error
 }
 
 type feedbackMsg struct {
@@ -132,23 +132,23 @@ type feedbackMsg struct {
 }
 
 // NewModel creates a status model.
-func NewModel(branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) model {
-	return NewModelWithRepo(branch, verification, daemonRunning, theme, "", 250*time.Millisecond)
+func NewModel(branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) model {
+	return NewModelWithRepo(branch, verification, daemonState, theme, "", 250*time.Millisecond)
 }
 
 // NewModelWithRepo creates a status model with periodic refresh.
-func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme, repo string, interval time.Duration) model {
+func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme, repo string, interval time.Duration) model {
 	if interval <= 0 {
 		interval = 250 * time.Millisecond
 	}
 	m := model{
-		theme:         theme,
-		branch:        branch,
-		verification:  verification,
-		daemonRunning: daemonRunning,
-		repo:          repo,
-		interval:      interval,
-		keys:          defaultKeyMap(),
+		theme:        theme,
+		branch:       branch,
+		verification: verification,
+		daemon:       daemonState,
+		repo:         repo,
+		interval:     interval,
+		keys:         defaultKeyMap(),
 	}
 
 	// Build table columns/rows.
@@ -185,7 +185,7 @@ func detailViewportKeyMap() viewport.KeyMap {
 }
 
 func fetchStatusMsg(ctx context.Context, repo string) refreshMsg {
-	running, err := daemon.Running(repo)
+	daemonState, err := daemon.Status(repo)
 	if err != nil {
 		return refreshMsg{fetchErr: fmt.Errorf("report daemon: %w", err)}
 	}
@@ -193,7 +193,7 @@ func fetchStatusMsg(ctx context.Context, repo string) refreshMsg {
 	if err != nil {
 		return refreshMsg{fetchErr: err}
 	}
-	normalizeValidationRunning(&branch, running)
+	normalizeValidationRunning(&branch, daemonState.Running)
 	verification, err := verifier.ReportBranch(ctx, repo)
 	if err != nil {
 		return refreshMsg{fetchErr: fmt.Errorf("report verification: %w", err)}
@@ -202,9 +202,9 @@ func fetchStatusMsg(ctx context.Context, repo string) refreshMsg {
 		return refreshMsg{fetchErr: fmt.Errorf("branch changed while collecting status; retry")}
 	}
 	return refreshMsg{
-		branch:        branch,
-		verification:  verification,
-		daemonRunning: running,
+		branch:       branch,
+		verification: verification,
+		daemon:       daemonState,
 	}
 }
 
@@ -396,7 +396,7 @@ func (m model) View() tea.View {
 	b.WriteString(m.theme.Title.Render("Tillit"))
 	b.WriteString("\n")
 
-	daemonStr := m.theme.DaemonBadge(m.daemonRunning)
+	daemonStr := m.theme.DaemonBadge(m.daemon.Running, m.daemon.NeedsRestart)
 	if m.theme.ColorEnabled {
 		daemonStr = m.theme.BranchInfo.Render("Daemon: ") + daemonStr
 	} else {
@@ -546,7 +546,7 @@ func updateRefreshMsg(m *model, msg refreshMsg) (tea.Model, tea.Cmd) {
 	if msg.fetchErr == nil {
 		m.branch = msg.branch
 		m.verification = msg.verification
-		m.daemonRunning = msg.daemonRunning
+		m.daemon = msg.daemon
 		m.rebuildTableLocked()
 		if isShowingDetail(m) {
 			return *m, m.refreshCmd()

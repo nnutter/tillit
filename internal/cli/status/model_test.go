@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
 	"github.com/nnutter/tillit/internal/ui"
 	"github.com/nnutter/tillit/internal/verifier"
 )
@@ -65,7 +66,7 @@ func sampleStatusData() (auditor.BranchResult, verifier.BranchResult) {
 
 func TestViewStacksValidationAndVerificationSummaries(t *testing.T) {
 	branch, verification := sampleStatusData()
-	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	var validLine, verifLine string
 	for line := range strings.SplitSeq(m.View().Content, "\n") {
@@ -86,7 +87,7 @@ func TestViewStacksValidationAndVerificationSummaries(t *testing.T) {
 
 func TestTableShowsOnlyStatusBadgesWithoutDescriptions(t *testing.T) {
 	branch, verification := sampleStatusData()
-	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	view := m.View().Content
 	assert.Contains(t, view, "✓ passed")
@@ -99,7 +100,7 @@ func TestTableShowsOnlyStatusBadgesWithoutDescriptions(t *testing.T) {
 
 func TestSelectedRowShowsIndicatorWithoutIndenting(t *testing.T) {
 	branch, verification := sampleStatusData()
-	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	findLine := func(content, substr string) string {
 		for line := range strings.SplitSeq(content, "\n") {
@@ -142,7 +143,7 @@ func TestSelectedRowShowsIndicatorWithoutIndenting(t *testing.T) {
 
 func TestViewOmitsAutoRefreshFooter(t *testing.T) {
 	branch, verification := sampleStatusData()
-	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	plain := stripANSI(m.View().Content)
 	assert.NotContains(t, plain, "auto-refresh")
@@ -151,7 +152,7 @@ func TestViewOmitsAutoRefreshFooter(t *testing.T) {
 
 func TestHeaderLayout(t *testing.T) {
 	branch, verification := sampleStatusData()
-	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	view := m.View()
 	assert.Equal(t, "Tillit", view.WindowTitle)
@@ -184,7 +185,7 @@ func TestTableColumnOrderAndExpandedSubject(t *testing.T) {
 	branch, verification := sampleStatusData()
 	longSubject := "Refactor status table layout so commit subjects use remaining terminal width"
 	branch.Outcomes[0].Subject = longSubject
-	m := NewModelWithRepo(branch, verification, true, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 
 	resized, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 30})
 	plain := stripANSI(resized.(model).View().Content)
@@ -206,4 +207,14 @@ func TestTableColumnOrderAndExpandedSubject(t *testing.T) {
 	assert.Less(t, validPos, verifPos)
 	assert.Less(t, verifPos, subjPos)
 	assert.Contains(t, plain, longSubject)
+}
+
+func TestViewShowsDaemonNeedsRestart(t *testing.T) {
+	branch, verification := sampleStatusData()
+
+	synced := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	assert.NotContains(t, stripANSI(synced.View().Content), "(needs restart)")
+
+	stale := NewModelWithRepo(branch, verification, daemon.State{Running: true, NeedsRestart: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
+	assert.Contains(t, stripANSI(stale.View().Content), "● running (needs restart)")
 }

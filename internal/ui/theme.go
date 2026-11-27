@@ -30,6 +30,8 @@ type Theme struct {
 	BranchInfo lipgloss.Style
 	// DaemonRunning renders the running daemon badge.
 	DaemonRunning lipgloss.Style
+	// DaemonNeedsRestart renders the out-of-sync daemon suffix.
+	DaemonNeedsRestart lipgloss.Style
 	// DaemonStopped renders the stopped daemon badge.
 	DaemonStopped lipgloss.Style
 	// SummaryLabel is the small label for summary items.
@@ -113,6 +115,7 @@ func New(colorEnabled, hasDark bool) Theme {
 		t.Subtitle = lipgloss.NewStyle()
 		t.BranchInfo = lipgloss.NewStyle()
 		t.DaemonRunning = lipgloss.NewStyle()
+		t.DaemonNeedsRestart = lipgloss.NewStyle()
 		t.DaemonStopped = lipgloss.NewStyle()
 		t.SummaryLabel = lipgloss.NewStyle()
 		t.SummaryValue = lipgloss.NewStyle()
@@ -166,6 +169,9 @@ func New(colorEnabled, hasDark bool) Theme {
 	t.DaemonRunning = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(cSuccess)
+
+	t.DaemonNeedsRestart = lipgloss.NewStyle().
+		Foreground(cWarning)
 
 	t.DaemonStopped = lipgloss.NewStyle().
 		Foreground(cMuted)
@@ -253,17 +259,24 @@ func Default() Theme {
 }
 
 // DaemonBadge renders daemon state.
-func (t Theme) DaemonBadge(running bool) string {
-	if running {
+func (t Theme) DaemonBadge(running, needsRestart bool) string {
+	if !running {
 		if !t.ColorEnabled {
-			return "running"
+			return "stopped"
 		}
-		return t.DaemonRunning.Render(t.SymRunning + " running")
+		return t.DaemonStopped.Render(t.SymStopped + " stopped")
 	}
 	if !t.ColorEnabled {
-		return "stopped"
+		if needsRestart {
+			return "running (needs restart)"
+		}
+		return "running"
 	}
-	return t.DaemonStopped.Render(t.SymStopped + " stopped")
+	badge := t.DaemonRunning.Render(t.SymRunning + " running")
+	if needsRestart {
+		badge += " " + t.DaemonNeedsRestart.Render("(needs restart)")
+	}
+	return badge
 }
 
 // SectionTitle renders a section heading.

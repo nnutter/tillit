@@ -10,6 +10,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/nnutter/tillit/internal/auditor"
+	"github.com/nnutter/tillit/internal/daemon"
 	"github.com/nnutter/tillit/internal/ui"
 	"github.com/nnutter/tillit/internal/verifier"
 )
@@ -21,14 +22,14 @@ import (
 // it falls back to a plain, greppable format that still contains
 // the historical substrings (hash + subject + state and
 // "verification: ..." ).
-func renderStatic(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) error {
+func renderStatic(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) error {
 	if theme.ColorEnabled {
-		return renderColor(w, branch, verification, daemonRunning, theme)
+		return renderColor(w, branch, verification, daemonState, theme)
 	}
-	return renderPlain(w, branch, verification, daemonRunning, theme)
+	return renderPlain(w, branch, verification, daemonState, theme)
 }
 
-func renderPlain(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) error {
+func renderPlain(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) error {
 	// Header - plain but improved over the historic single line.
 	// Keep historics: "daemon: running" substring is produced.
 	// Use theme (which is plain) for consistent rendering.
@@ -39,11 +40,7 @@ func renderPlain(w io.Writer, branch auditor.BranchResult, verification verifier
 	b.WriteString(strings.Repeat("=", 30) + "\n")
 
 	// Daemon line - keep legacy "daemon:" prefix for compatibility.
-	state := "stopped"
-	if daemonRunning {
-		state = "running"
-	}
-	fmt.Fprintf(&b, "daemon: %s\n", state)
+	fmt.Fprintf(&b, "daemon: %s\n", theme.DaemonBadge(daemonState.Running, daemonState.NeedsRestart))
 
 	// Branch info
 	if len(branch.Snapshot.Branch) > 0 {
@@ -114,7 +111,7 @@ func plainVerification(out verifier.BranchOutcome) string {
 // renderColor draws the full styled view (TTY or forced color).
 // It uses bubble's table component for commits, lipgloss for header
 // and daemon badges, and the semantic theme for state colors.
-func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) error {
+func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme) error {
 	var b strings.Builder
 
 	// Title on its own line.
@@ -122,8 +119,8 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 	b.WriteString("\n")
 
 	// Branch + daemon metadata line.
-	daemonStr := theme.DaemonBadge(daemonRunning)
-	daemonLine := fmt.Sprintf("daemon: %s   %s", map[bool]string{true: "running", false: "stopped"}[daemonRunning], daemonStr)
+	daemonStr := theme.DaemonBadge(daemonState.Running, daemonState.NeedsRestart)
+	daemonLine := fmt.Sprintf("daemon: %s", daemonStr)
 	if theme.ColorEnabled {
 		prefix := theme.BranchInfo.Render("Daemon:")
 		daemonLine = lipgloss.JoinHorizontal(lipgloss.Left,
@@ -171,13 +168,14 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 }
 
 type statusReport struct {
-	Version  int            `json:"version"`
-	Daemon   string         `json:"daemon"`
-	Branch   string         `json:"branch"`
-	Tip      string         `json:"tip"`
-	Boundary string         `json:"boundary"`
-	Summary  statusSummary  `json:"summary"`
-	Commits  []statusCommit `json:"commits"`
+	Version            int            `json:"version"`
+	Daemon             string         `json:"daemon"`
+	DaemonNeedsRestart bool           `json:"daemon_needs_restart,omitzero"`
+	Branch             string         `json:"branch"`
+	Tip                string         `json:"tip"`
+	Boundary           string         `json:"boundary"`
+	Summary            statusSummary  `json:"summary"`
+	Commits            []statusCommit `json:"commits"`
 }
 
 type statusSummary struct {
@@ -199,10 +197,12 @@ type statusVerification struct {
 	Error  string `json:"error,omitempty"`
 }
 
-func renderJSON(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool) error {
-	daemonState := "stopped"
-	if daemonRunning {
-		daemonState = "running"
+func renderJSON(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State) error {
+	daemonLabel := "stopped"
+	needsRestart := false
+	if daemonState.Running {
+		daemonLabel = "running"
+		needsRestart = daemonState.NeedsRestart
 	}
 	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
 	verified, rejected, bypassed, vpending, verr := countVerification(verification.Outcomes)
@@ -224,11 +224,12 @@ func renderJSON(w io.Writer, branch auditor.BranchResult, verification verifier.
 	}
 
 	rep := statusReport{
-		Version:  1,
-		Daemon:   daemonState,
-		Branch:   branch.Snapshot.Branch,
-		Tip:      branch.Snapshot.Head,
-		Boundary: branch.Snapshot.Base,
+		Version:            1,
+		Daemon:             daemonLabel,
+		DaemonNeedsRestart: needsRestart,
+		Branch:             branch.Snapshot.Branch,
+		Tip:                branch.Snapshot.Head,
+		Boundary:           branch.Snapshot.Base,
 		Summary: statusSummary{
 			Validation: map[string]int{
 				"passed":  passed,

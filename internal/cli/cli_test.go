@@ -102,6 +102,40 @@ func TestStatusJSON(t *testing.T) {
 	require.False(t, running)
 }
 
+func TestStatusShowsDaemonNeedsRestart(t *testing.T) {
+	dir := cleanRepo(t)
+	ctx, cancel := context.WithCancel(t.Context())
+	done := make(chan error, 1)
+	go func() { done <- daemon.Run(ctx, dir) }()
+	t.Cleanup(func() { cancel(); require.NoError(t, <-done) })
+
+	require.Eventually(t, func() bool {
+		state, err := daemon.Status(dir)
+		if err != nil {
+			return false
+		}
+		if !state.Running {
+			return false
+		}
+		return !state.NeedsRestart
+	}, time.Second, 10*time.Millisecond)
+
+	versionPath := filepath.Join(dir, ".git", "tillit", "daemon.version")
+	require.NoError(t, os.WriteFile(versionPath, []byte("stale-fingerprint\n"), 0o600))
+
+	simple := execute(t, dir, "status", "--simple")
+	require.Contains(t, simple, "daemon: running (needs restart)")
+
+	rawJSON := execute(t, dir, "status", "--json")
+	var report struct {
+		Daemon             string `json:"daemon"`
+		DaemonNeedsRestart bool   `json:"daemon_needs_restart"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(rawJSON), &report))
+	require.Equal(t, "running", report.Daemon)
+	require.True(t, report.DaemonNeedsRestart)
+}
+
 func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 	for _, configured := range []bool{false, true} {
 		t.Run(fmt.Sprint(configured), func(t *testing.T) {

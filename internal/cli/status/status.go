@@ -62,17 +62,17 @@ func run(cmd *cobra.Command, _ []string) error {
 	interval, _ := cmd.Flags().GetDuration("interval")
 	noStart, _ := cmd.Flags().GetBool("no-start")
 
-	running, branch, verification, err := collectStatus(cmd, repo)
+	daemonState, branch, verification, err := collectStatus(cmd, repo)
 	if err != nil {
 		return err
 	}
 
-	if shouldAutoStart(running, noStart, simpleFlag, jsonFlag) {
-		running = ensureDaemon(cmd, repo)
+	if shouldAutoStart(daemonState.Running, noStart, simpleFlag, jsonFlag) {
+		daemonState = ensureDaemon(cmd, repo)
 	}
 
 	if jsonFlag {
-		return renderJSON(cmd.OutOrStdout(), branch, verification, running)
+		return renderJSON(cmd.OutOrStdout(), branch, verification, daemonState)
 	}
 
 	// Determine output mode.
@@ -89,21 +89,21 @@ func run(cmd *cobra.Command, _ []string) error {
 
 	if simpleFlag {
 		theme := ui.New(false, false)
-		return renderStatic(cmd.OutOrStdout(), branch, verification, running, theme)
+		return renderStatic(cmd.OutOrStdout(), branch, verification, daemonState, theme)
 	}
 
 	if shouldUseInteractive(interactiveFlag, isTTY) {
 		// Interactive path - requires Bubble Tea.
 		theme := ui.Default()
 		// Allow bubbletea to update theme on BackgroundColorMsg.
-		return runInteractive(cmd, repo, branch, verification, running, theme, interval)
+		return runInteractive(cmd, repo, branch, verification, daemonState, theme, interval)
 	}
 
 	// Non-TTY auto plain - but still with improved header/summary (plain theme).
 	// This keeps historic substrings for scripts/tests while adding the
 	// semantic summary and branch info.
 	theme := ui.New(false, false)
-	return renderStatic(cmd.OutOrStdout(), branch, verification, running, theme)
+	return renderStatic(cmd.OutOrStdout(), branch, verification, daemonState, theme)
 }
 
 func shouldUseInteractive(a, b bool) bool { return isTruthy(a) || isTruthy(b) }
@@ -121,43 +121,43 @@ func shouldAutoStart(running, noStart, simple, asJSON bool) bool {
 	return !asJSON
 }
 
-func collectStatus(cmd *cobra.Command, repo string) (bool, auditor.BranchResult, verifier.BranchResult, error) {
-	running, err := daemon.Running(repo)
+func collectStatus(cmd *cobra.Command, repo string) (daemon.State, auditor.BranchResult, verifier.BranchResult, error) {
+	daemonState, err := daemon.Status(repo)
 	if err != nil {
-		return false, auditor.BranchResult{}, verifier.BranchResult{}, fmt.Errorf("report daemon: %w", err)
+		return daemon.State{}, auditor.BranchResult{}, verifier.BranchResult{}, fmt.Errorf("report daemon: %w", err)
 	}
 	branch, err := auditor.ReportBranch(cmd.Context(), repo)
 	if err != nil {
-		return running, auditor.BranchResult{}, verifier.BranchResult{}, err
+		return daemonState, auditor.BranchResult{}, verifier.BranchResult{}, err
 	}
-	normalizeValidationRunning(&branch, running)
+	normalizeValidationRunning(&branch, daemonState.Running)
 	verification, err := branchVerification(cmd, repo, branch.Snapshot)
 	if err != nil {
-		return running, branch, verifier.BranchResult{}, err
+		return daemonState, branch, verifier.BranchResult{}, err
 	}
-	return running, branch, verification, nil
+	return daemonState, branch, verification, nil
 }
 
 // ensureDaemon starts the supervised daemon if it is not already running.
-// It returns the new running state for display. "already running" races are
+// It returns the new daemon state for display. "already running" races are
 // treated as success; other failures are logged to stderr and the caller
 // continues to render a status snapshot.
-func ensureDaemon(cmd *cobra.Command, repo string) bool {
+func ensureDaemon(cmd *cobra.Command, repo string) daemon.State {
 	if _, err := daemon.Start(cmd.Context(), repo); err != nil {
 		if errors.Is(err, daemon.ErrAlreadyRunning) || strings.Contains(err.Error(), "already running") {
-			if updated, checkErr := daemon.Running(repo); checkErr == nil {
+			if updated, checkErr := daemon.Status(repo); checkErr == nil {
 				return updated
 			}
-			return true
+			return daemon.State{Running: true}
 		}
 		_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "tillit status: start daemon: %v\n", err)
 		// Re-check: start may have partially succeeded.
-		if updated, checkErr := daemon.Running(repo); checkErr == nil {
+		if updated, checkErr := daemon.Status(repo); checkErr == nil {
 			return updated
 		}
-		return false
+		return daemon.State{}
 	}
-	return true
+	return daemon.State{Running: true}
 }
 
 func isTerminal(w io.Writer) bool {
@@ -167,8 +167,8 @@ func isTerminal(w io.Writer) bool {
 	return false
 }
 
-func runInteractive(cmd *cobra.Command, repo string, branch auditor.BranchResult, verification verifier.BranchResult, running bool, theme ui.Theme, interval time.Duration) error {
-	m := NewModelWithRepo(branch, verification, running, theme, repo, interval)
+func runInteractive(cmd *cobra.Command, repo string, branch auditor.BranchResult, verification verifier.BranchResult, daemonState daemon.State, theme ui.Theme, interval time.Duration) error {
+	m := NewModelWithRepo(branch, verification, daemonState, theme, repo, interval)
 
 	// Bubble Tea v2: View sets AltScreen declaratively.
 	// We supply output/input from cobra so tests can capture.
@@ -191,7 +191,7 @@ func runInteractive(cmd *cobra.Command, repo string, branch auditor.BranchResult
 		fallbackTheme := theme
 		if err != nil {
 			// Try static color fallback.
-			if fbErr := renderColor(out, branch, verification, running, fallbackTheme); fbErr != nil {
+			if fbErr := renderColor(out, branch, verification, daemonState, fallbackTheme); fbErr != nil {
 				return fmt.Errorf("run TUI and fallback: %w; %v", err, fbErr)
 			}
 			return nil
