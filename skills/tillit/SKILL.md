@@ -8,16 +8,22 @@ description: Retrieve Tillit validation feedback for failed branch commits and r
 Use this skill when Tillit reports failed validation on a feature branch or when asked to inspect and fix Tillit validation feedback.
 Run commands from the feature worktree.
 
-## Retrieve validation feedback
+## Retrieve validation status and feedback
 
-Pull recorded validation failures and evidence with:
+Inspect branch status (daemon state, validation, and verification per commit stack) with:
+
+```sh
+tillit status --json
+```
+
+Pull recorded validation failures, command output, and reproduction commands with:
 
 ```sh
 tillit feedback --json
 ```
 
-Use `tillit feedback` without `--json` for a human-readable summary.
-Use `tillit status --simple --no-start` for a plain-text overview of every commit stack without launching the interactive TUI or starting the daemon.
+Use `tillit feedback` without `--json` for a human-readable failure summary, or `tillit status --simple` for plain-text status.
+Both `tillit status --json` and `tillit status --simple` imply `--no-start` and do not start the daemon.
 
 `tillit feedback --json` is read-only and returns recorded evidence without running checks:
 
@@ -105,5 +111,5 @@ Keep original and `fixup!` commits separate unless the user explicitly requests 
 
 1. Confirm the checkout is back on the feature branch with a clean working tree.
 1. Run the repository's validation checks on the final branch tip.
-1. Check `tillit status --simple --no-start` or `tillit feedback --json` after the daemon re-validates the updated stacks.
+1. Check `tillit status --json` or `tillit feedback --json` after the daemon re-validates the updated stacks.
 1. Report each failing stack tip: either the fixup commit created and its verification result, or why the failure was left unaddressed because it cannot be resolved at that commit alone.
