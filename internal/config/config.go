@@ -15,11 +15,7 @@ type Config struct {
 }
 
 type document struct {
-	Auditor *auditorDocument `json:"auditor,omitempty"`
-}
-
-type auditorDocument struct {
-	Validate *validateDocument `json:"validate,omitempty"`
+	Validate *validateDocument `json:"validate,omitzero"`
 }
 
 type validateDocument struct {
@@ -105,11 +101,8 @@ func applyDocument(cfg Config, doc document) Config {
 }
 
 func documentCommand(doc document) *[]string {
-	if doc.Auditor == nil {
+	if doc.Validate == nil {
 		return nil
 	}
-	if doc.Auditor.Validate == nil {
-		return nil
-	}
-	return doc.Auditor.Validate.Command
+	return doc.Validate.Command
 }

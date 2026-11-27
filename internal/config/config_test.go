@@ -15,14 +15,31 @@ func TestLoadWorktreeOverridesTheCommonDir(t *testing.T) {
 	common := t.TempDir()
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "commondir"), []byte(common+"\n"), 0o644))
 	writeConfig(t, filepath.Join(common, "tillit", "config.json"), `{
-		"auditor": {"validate": {"command": ["from-common"]}}
+		"validate": {"command": ["from-common"]}
 	}`)
 	writeConfig(t, filepath.Join(gitDir, "tillit", "config.json"), `{
-		"auditor": {"validate": {"command": ["from-worktree"]}}
+		"validate": {"command": ["from-worktree"]}
 	}`)
 
 	cfg := load(t, gitDir)
 	require.Equal(t, []string{"from-worktree"}, cfg.Command)
+}
+
+func TestLoadRejectsLegacyAuditorSettings(t *testing.T) {
+	gitDir := tempGitDir(t)
+	path := filepath.Join(gitDir, "tillit", "config.json")
+	writeConfig(t, path, `{"auditor":{"validate":{"command":["true"]}}}`)
+	_, err := config.Load(gitDir)
+	require.ErrorContains(t, err, path)
+	require.ErrorContains(t, err, "auditor")
+	require.ErrorContains(t, err, "validate")
+	_, err = config.Show(gitDir, config.ScopeWorktree)
+	require.ErrorContains(t, err, "validate")
+	err = config.Set(gitDir, config.ScopeWorktree, "validate.command", []string{"true"})
+	require.ErrorContains(t, err, "auditor")
+	err = config.Set(gitDir, config.ScopeWorktree, "auditor.validate.command", []string{"true"})
+	require.ErrorContains(t, err, "auditor")
+	require.ErrorContains(t, err, "validate")
 }
 
 func tempGitDir(t *testing.T) string {

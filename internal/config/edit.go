@@ -104,7 +104,7 @@ func Remove(gitDir string, scope Scope, key, value string, hasValue bool) error 
 }
 
 func commandDocument(command []string) document {
-	return document{Auditor: new(auditorDocument{Validate: new(validateDocument{Command: new(command)})})}
+	return document{Validate: new(validateDocument{Command: new(command)})}
 }
 
 func documentFor(gitDir string, scope Scope) (document, error) {
@@ -144,6 +144,15 @@ func decodeDocument(data []byte, path string) (document, error) {
 	var doc document
 	if err := json.Unmarshal(data, &doc); err != nil {
 		return document{}, fmt.Errorf("read tillit config %s: %w", path, err)
+	}
+	var envelope struct {
+		Auditor jsontext.Value `json:"auditor"`
+	}
+	if err := json.Unmarshal(data, &envelope); err != nil {
+		return document{}, fmt.Errorf("read tillit config %s: %w", path, err)
+	}
+	if len(envelope.Auditor) > 0 {
+		return document{}, fmt.Errorf("read tillit config %s: auditor section was removed; move its settings to validate", path)
 	}
 	return doc, nil
 }

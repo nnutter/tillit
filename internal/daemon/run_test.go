@@ -36,7 +36,7 @@ func branchRepo(t *testing.T) (string, string) {
 	branchGit(t, dir, "config", "branch.master.merge", "refs/remotes/origin/main")
 	log := filepath.Join(t.TempDir(), "calls")
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(`{"auditor":{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}}`), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(`{"validate":{"command":["sh","-c","echo run >> `+log+`"]}}`), 0o644))
 	branchGit(t, dir, "add", ".tillit/config.json")
 	branchGit(t, dir, "commit", "-m", "configure validation")
 	return dir, log

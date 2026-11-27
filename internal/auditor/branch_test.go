@@ -31,7 +31,7 @@ func TestValidateBranchRetriesInfrastructureErrors(t *testing.T) {
 	runGit(t, dir, "config", "branch.feature.remote", ".")
 	runGit(t, dir, "config", "branch.feature.merge", "refs/remotes/origin/main")
 	script := filepath.Join(t.TempDir(), "check")
-	data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{script}}}})
+	data, err := json.Marshal(map[string]any{"validate": map[string]any{"command": []string{script}}})
 	require.NoError(t, err)
 	writeFile(t, filepath.Join(dir, ".tillit", "config.json"), string(data))
 	runGit(t, dir, "add", ".tillit/config.json")
@@ -89,7 +89,7 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	configPath := filepath.Join(dir, ".tillit", "config.json")
 	writeBranchConfig := func(value string) {
 		t.Helper()
-		data, err := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})
+		data, err := json.Marshal(map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}})
 		require.NoError(t, err)
 		require.NoError(t, os.MkdirAll(filepath.Dir(configPath), 0o755))
 		require.NoError(t, os.WriteFile(configPath, data, 0o644))
@@ -152,7 +152,7 @@ func TestValidateBranchHistoricalConfigAndCache(t *testing.T) {
 	external := filepath.Join(gitDir, "tillit", "config.json")
 	writeExternal := func(value string) {
 		t.Helper()
-		data, marshalErr := json.Marshal(map[string]any{"auditor": map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}}})
+		data, marshalErr := json.Marshal(map[string]any{"validate": map[string]any{"command": []string{"sh", script, value}}})
 		require.NoError(t, marshalErr)
 		require.NoError(t, os.MkdirAll(filepath.Dir(external), 0o755))
 		require.NoError(t, os.WriteFile(external, data, 0o644))
