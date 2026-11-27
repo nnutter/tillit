@@ -29,13 +29,14 @@ func New() *cobra.Command {
 
 By default, status renders an interactive TUI (Bubble Tea + Bubbles + Lip Gloss)
 when attached to a terminal, and a plain, scriptable summary otherwise.
-Use --simple for plain output and --interactive to force the TUI.
+Use --simple for plain output, --json for machine-readable JSON,
+and --interactive to force the TUI.
 The design language is centralized in internal/ui/theme.go and uses
 semantic colors for every state (passed/failed/pending/running/error, verified/rejected/bypassed).
 The TUI auto-refreshes every 250ms (configurable with --interval) so that
 validation states transition pending → running → passed/failed without restart.
 Status starts the daemon automatically if it is not already running;
-use --no-start to disable auto-start (--simple implies --no-start).
+use --no-start to disable auto-start (--simple and --json imply --no-start).
 In the TUI, select a commit and press <enter> to see its feedback in a pop-over
 (scroll with ↑/↓, esc/enter to close).
 `,
@@ -44,6 +45,7 @@ In the TUI, select a commit and press <enter> to see its feedback in a pop-over
 	}
 	cmd.Flags().Bool("interactive", false, "force interactive TUI")
 	cmd.Flags().Bool("simple", false, "render plain text without TUI or colors (implies --no-start)")
+	cmd.Flags().Bool("json", false, "render status as JSON (implies --no-start)")
 	cmd.Flags().Duration("interval", 250*time.Millisecond, "refresh interval for interactive TUI")
 	cmd.Flags().Bool("no-start", false, "do not start the daemon if it is not already running")
 	return cmd
@@ -56,6 +58,7 @@ func run(cmd *cobra.Command, _ []string) error {
 	}
 	interactiveFlag, _ := cmd.Flags().GetBool("interactive")
 	simpleFlag, _ := cmd.Flags().GetBool("simple")
+	jsonFlag, _ := cmd.Flags().GetBool("json")
 	interval, _ := cmd.Flags().GetDuration("interval")
 	noStart, _ := cmd.Flags().GetBool("no-start")
 
@@ -64,8 +67,12 @@ func run(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	if shouldAutoStart(running, noStart, simpleFlag) {
+	if shouldAutoStart(running, noStart, simpleFlag, jsonFlag) {
 		running = ensureDaemon(cmd, repo)
+	}
+
+	if jsonFlag {
+		return renderJSON(cmd.OutOrStdout(), branch, verification, running)
 	}
 
 	// Determine output mode.
@@ -101,14 +108,17 @@ func run(cmd *cobra.Command, _ []string) error {
 
 func shouldUseInteractive(a, b bool) bool { return isTruthy(a) || isTruthy(b) }
 func isTruthy(b bool) bool                { return b }
-func shouldAutoStart(running, noStart, simple bool) bool {
+func shouldAutoStart(running, noStart, simple, asJSON bool) bool {
 	if running {
 		return false
 	}
 	if noStart {
 		return false
 	}
-	return !simple
+	if simple {
+		return false
+	}
+	return !asJSON
 }
 
 func collectStatus(cmd *cobra.Command, repo string) (bool, auditor.BranchResult, verifier.BranchResult, error) {

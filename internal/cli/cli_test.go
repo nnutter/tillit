@@ -48,6 +48,60 @@ func TestStatusShowsEveryBranchCommit(t *testing.T) {
 	require.False(t, running)
 }
 
+func TestStatusJSON(t *testing.T) {
+	dir := cleanRepo(t)
+	writeConfig(t, dir, []string{"false"}, "")
+	repo, err := git.PlainOpen(dir)
+	require.NoError(t, err)
+	defer func() { _ = repo.Close() }()
+	wt, err := repo.Worktree()
+	require.NoError(t, err)
+	sig := &object.Signature{Name: "Test", Email: "test@example.com", When: time.Now()}
+	first, err := wt.Commit("first failure", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
+	require.NoError(t, err)
+	_, err = auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	second, err := wt.Commit("later pending", &git.CommitOptions{Author: sig, AllowEmptyCommits: true})
+	require.NoError(t, err)
+
+	out := execute(t, dir, "status", "--json")
+	var report struct {
+		Version  int    `json:"version"`
+		Daemon   string `json:"daemon"`
+		Branch   string `json:"branch"`
+		Tip      string `json:"tip"`
+		Boundary string `json:"boundary"`
+		Summary  struct {
+			Validation   map[string]int `json:"validation"`
+			Verification map[string]int `json:"verification"`
+		} `json:"summary"`
+		Commits []struct {
+			Commit       string `json:"commit"`
+			Subject      string `json:"subject"`
+			Validation   string `json:"validation"`
+			Verification struct {
+				Status string `json:"status"`
+			} `json:"verification"`
+		} `json:"commits"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(out), &report))
+	require.Equal(t, 1, report.Version)
+	require.Equal(t, "stopped", report.Daemon)
+	require.Equal(t, second.String(), report.Tip)
+	require.Equal(t, 1, report.Summary.Validation["failed"])
+	require.Equal(t, 1, report.Summary.Validation["pending"])
+	require.Equal(t, 2, report.Summary.Verification["pending"])
+	require.Len(t, report.Commits, 2)
+	require.Equal(t, first.String(), report.Commits[0].Commit)
+	require.Equal(t, "failed", report.Commits[0].Validation)
+	require.Equal(t, "pending", report.Commits[0].Verification.Status)
+	require.Equal(t, second.String(), report.Commits[1].Commit)
+	require.Equal(t, "pending", report.Commits[1].Validation)
+	running, err := daemon.Running(dir)
+	require.NoError(t, err)
+	require.False(t, running)
+}
+
 func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 	for _, configured := range []bool{false, true} {
 		t.Run(fmt.Sprint(configured), func(t *testing.T) {

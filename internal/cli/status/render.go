@@ -1,6 +1,7 @@
 package status
 
 import (
+	json "encoding/json/v2"
 	"fmt"
 	"io"
 	"strings"
@@ -167,4 +168,97 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 	content := theme.Document.Render(b.String())
 	_, err := io.WriteString(w, content)
 	return err
+}
+
+type statusReport struct {
+	Version  int            `json:"version"`
+	Daemon   string         `json:"daemon"`
+	Branch   string         `json:"branch"`
+	Tip      string         `json:"tip"`
+	Boundary string         `json:"boundary"`
+	Summary  statusSummary  `json:"summary"`
+	Commits  []statusCommit `json:"commits"`
+}
+
+type statusSummary struct {
+	Validation   map[string]int `json:"validation"`
+	Verification map[string]int `json:"verification"`
+}
+
+type statusCommit struct {
+	Hash         string             `json:"commit"`
+	Subject      string             `json:"subject"`
+	Validation   string             `json:"validation"`
+	Error        string             `json:"error,omitempty"`
+	Verification statusVerification `json:"verification"`
+}
+
+type statusVerification struct {
+	Status string `json:"status"`
+	Reason string `json:"reason,omitempty"`
+	Error  string `json:"error,omitempty"`
+}
+
+func renderJSON(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool) error {
+	daemonState := "stopped"
+	if daemonRunning {
+		daemonState = "running"
+	}
+	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
+	verified, rejected, bypassed, vpending, verr := countVerification(verification.Outcomes)
+
+	byHash := make(map[string]verifier.BranchOutcome, len(verification.Outcomes))
+	for _, out := range verification.Outcomes {
+		byHash[out.Hash] = out
+	}
+
+	commits := make([]statusCommit, 0, len(branch.Outcomes))
+	for _, item := range branch.Outcomes {
+		commits = append(commits, statusCommit{
+			Hash:         item.Hash,
+			Subject:      item.Subject,
+			Validation:   item.State,
+			Error:        item.Error,
+			Verification: jsonVerification(byHash[item.Hash]),
+		})
+	}
+
+	rep := statusReport{
+		Version:  1,
+		Daemon:   daemonState,
+		Branch:   branch.Snapshot.Branch,
+		Tip:      branch.Snapshot.Head,
+		Boundary: branch.Snapshot.Base,
+		Summary: statusSummary{
+			Validation: map[string]int{
+				"passed":  passed,
+				"failed":  failed,
+				"pending": pending,
+				"running": running,
+				"error":   errCount,
+			},
+			Verification: map[string]int{
+				"verified": verified,
+				"rejected": rejected,
+				"bypassed": bypassed,
+				"pending":  vpending,
+				"error":    verr,
+			},
+		},
+		Commits: commits,
+	}
+	return json.MarshalWrite(w, rep)
+}
+
+func jsonVerification(out verifier.BranchOutcome) statusVerification {
+	if out.Error != "" {
+		return statusVerification{Status: "error", Error: out.Error}
+	}
+	if out.Result == nil {
+		return statusVerification{Status: "pending"}
+	}
+	return statusVerification{
+		Status: string(out.Result.Status),
+		Reason: out.Result.Reason,
+	}
 }
