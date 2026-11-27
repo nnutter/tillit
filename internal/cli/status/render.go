@@ -146,7 +146,7 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 			prefix, " ", daemonStr,
 		)
 	}
-	summary := buildColorSummary(branch, verification, theme)
+	summary := buildSummary(branch, verification, theme)
 	// Join daemon and summary on one line when space permits, else two lines.
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left,
 		daemonLine,
@@ -178,38 +178,4 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 	content := theme.Document.Render(b.String())
 	_, err := io.WriteString(w, content)
 	return err
-}
-
-func buildColorSummary(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme) string {
-	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
-	verified, rejected, unsupported, vpending, verr := countVerification(verification.Outcomes)
-
-	if isColorDisabled(theme) {
-		return fmt.Sprintf("Validation: %d passed, %d failed, %d pending, %d running, %d error  •  Verification: %d verified, %d rejected, %d unsupported, %d pending, %d error",
-			passed, failed, pending, running, errCount, verified, rejected, unsupported, vpending, verr)
-	}
-	label := theme.SummaryLabel
-
-	validParts := lipgloss.JoinHorizontal(lipgloss.Left,
-		label.Render("Validation: "),
-		theme.ValidationPassed.Render(fmt.Sprintf("%d passed", passed)), ", ",
-		theme.ValidationFailed.Render(fmt.Sprintf("%d failed", failed)), ", ",
-		label.Render(fmt.Sprintf("%d pending", pending)),
-		", ", theme.ValidationRunning.Render(fmt.Sprintf("%d running", running)),
-	)
-	if isPositive(errCount) {
-		validParts = lipgloss.JoinHorizontal(lipgloss.Left,
-			validParts, ", ", theme.ValidationError.Render(fmt.Sprintf("%d error", errCount)),
-		)
-	}
-	verifParts := lipgloss.JoinHorizontal(lipgloss.Left,
-		label.Render("Verification: "),
-		theme.VerificationVerified.Render(fmt.Sprintf("%d verified", verified)), ", ",
-		theme.VerificationRejected.Render(fmt.Sprintf("%d rejected", rejected)), ", ",
-		theme.VerificationUnsupported.Render(fmt.Sprintf("%d unsupported", unsupported)),
-	)
-	verifParts = appendPendingVerif(verifParts, vpending, verr, theme, label)
-	return lipgloss.JoinHorizontal(lipgloss.Left,
-		validParts, "  │  ", verifParts,
-	)
 }
