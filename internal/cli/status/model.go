@@ -155,7 +155,7 @@ func NewModelWithRepo(branch auditor.BranchResult, verification verifier.BranchR
 	}
 
 	// Build table columns/rows.
-	cols, rows := buildTableData(branch, verification, theme)
+	cols, rows := buildTableData(branch, verification, theme, 0)
 	m.table = table.New(
 		table.WithColumns(cols),
 		table.WithRows(rows),
@@ -297,10 +297,11 @@ func tableStyles(theme ui.Theme) table.Styles {
 	}
 }
 
-func buildTableData(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme) ([]table.Column, []table.Row) {
+func buildTableData(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme, cursor int) ([]table.Column, []table.Row) {
 	cols := []table.Column{
+		{Title: "", Width: 1},
 		{Title: "Commit", Width: 8},
-		{Title: "Subject", Width: 38},
+		{Title: "Subject", Width: 35},
 		{Title: "Validation", Width: 12},
 		{Title: "Verification", Width: 14},
 	}
@@ -311,17 +312,21 @@ func buildTableData(branch auditor.BranchResult, verification verifier.BranchRes
 	}
 
 	var rows []table.Row
-	for _, item := range branch.Outcomes {
+	for i, item := range branch.Outcomes {
+		indicator := " "
+		if i == cursor {
+			indicator = theme.SymSelected
+		}
 		hash := ui.ShortHash(item.Hash)
-		subject := truncateSubject(item.Subject, 38)
+		subject := truncateSubject(item.Subject, 35)
 		val := theme.ValidationBadge(item.State)
 		vOut := byHash[item.Hash]
 		verif := verificationBadge(vOut, theme)
 
-		rows = append(rows, table.Row{hash, subject, val, verif})
+		rows = append(rows, table.Row{indicator, hash, subject, val, verif})
 	}
 	if len(rows) == 0 {
-		rows = []table.Row{{"", "No commits selected for this branch", "", ""}}
+		rows = []table.Row{{" ", "", "No commits selected for this branch", "", ""}}
 	}
 	return cols, rows
 }
@@ -447,7 +452,7 @@ func (m model) View() tea.View {
 }
 
 func (m *model) rebuildTableLocked() {
-	cols, rows := buildTableData(m.branch, m.verification, m.theme)
+	cols, rows := buildTableData(m.branch, m.verification, m.theme, m.table.Cursor())
 	m.table.SetColumns(cols)
 	m.table.SetRows(rows)
 }
@@ -505,6 +510,32 @@ func (m model) renderDetail() string {
 		// Also render with a faint background dim via lipgloss?
 	}
 	return body
+}
+
+func (m *model) syncSelectionIndicator() {
+	if len(m.branch.Outcomes) == 0 {
+		return
+	}
+	rows := m.table.Rows()
+	cursor := m.table.Cursor()
+	changed := false
+	for i := range rows {
+		if len(rows[i]) == 0 {
+			continue
+		}
+		want := " "
+		if i == cursor {
+			want = m.theme.SymSelected
+		}
+		if rows[i][0] == want {
+			continue
+		}
+		rows[i][0] = want
+		changed = true
+	}
+	if changed {
+		m.table.UpdateViewport()
+	}
 }
 
 func updateRefreshMsg(m *model, msg refreshMsg) (tea.Model, tea.Cmd) {
@@ -568,6 +599,7 @@ func updateOtherMsg(m *model, msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.detailViewport, cmd = m.detailViewport.Update(msg)
 	} else {
 		m.table, cmd = m.table.Update(msg)
+		m.syncSelectionIndicator()
 	}
 	return *m, cmd
 }
@@ -589,6 +621,7 @@ func updateKeyMsg(m *model, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
+	m.syncSelectionIndicator()
 	return *m, cmd
 }
 

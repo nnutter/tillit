@@ -80,6 +80,7 @@ type Theme struct {
 	SymUnsupported       string
 	SymRunning           string
 	SymStopped           string
+	SymSelected          string
 }
 
 // New creates a theme.
@@ -102,6 +103,7 @@ func New(colorEnabled, hasDark bool) Theme {
 		SymUnsupported:       "○",
 		SymRunning:           "●",
 		SymStopped:           "○",
+		SymSelected:          "▸",
 	}
 
 	if !colorEnabled {
@@ -223,10 +225,7 @@ func New(colorEnabled, hasDark bool) Theme {
 		Padding(0, 1)
 	t.TableSelected = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(cInfo).
-		Border(lipgloss.NormalBorder(), false, false, false, true).
-		BorderForeground(cInfo).
-		Padding(0, 0, 0, 1)
+		Foreground(cInfo)
 	t.TableCursor = lipgloss.NewStyle().
 		Foreground(cInfo)
 
