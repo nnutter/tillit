@@ -17,11 +17,11 @@ func Run(ctx context.Context, repoPath string) error {
 }
 
 func runReady(ctx context.Context, repoPath string, ready func()) error {
-	lock, err := acquireWorktreeLock(repoPath)
+	lock, gitDir, err := acquireWorktreeLock(repoPath)
 	if err != nil {
 		return err
 	}
-	defer releaseWorktreeLock(lock)
+	defer releaseWorktreeLock(lock, gitDir)
 	slog.InfoContext(ctx, "Daemon started", "repo", repoPath)
 	defer slog.Info("Daemon stopped", "repo", repoPath)
 
