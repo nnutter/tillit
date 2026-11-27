@@ -91,9 +91,9 @@ func renderPlain(w io.Writer, branch auditor.BranchResult, verification verifier
 
 func plainSummary(branch auditor.BranchResult, verification verifier.BranchResult) string {
 	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
-	verified, rejected, unsupported, vpending, verr := countVerification(verification.Outcomes)
-	return fmt.Sprintf("summary: %d commits — validation: %d passed, %d failed, %d pending, %d running, %d error  •  verification: %d verified, %d rejected, %d unsupported, %d pending, %d error",
-		len(branch.Outcomes), passed, failed, pending, running, errCount, verified, rejected, unsupported, vpending, verr)
+	verified, rejected, bypassed, vpending, verr := countVerification(verification.Outcomes)
+	return fmt.Sprintf("summary: %d commits — validation: %d passed, %d failed, %d pending, %d running, %d error  •  verification: %d verified, %d rejected, %d bypassed, %d pending, %d error",
+		len(branch.Outcomes), passed, failed, pending, running, errCount, verified, rejected, bypassed, vpending, verr)
 }
 
 func plainVerification(out verifier.BranchOutcome) string {

@@ -54,7 +54,7 @@ func sampleStatusData() (auditor.BranchResult, verifier.BranchResult) {
 			{
 				Hash: "bbbbbbb2222222",
 				Result: &verifier.Result{
-					Status: verifier.Unsupported,
+					Status: verifier.Bypassed,
 					Reason: "commit must modify exactly one file",
 				},
 			},
@@ -92,7 +92,7 @@ func TestTableShowsOnlyStatusBadgesWithoutDescriptions(t *testing.T) {
 	assert.Contains(t, view, "✓ passed")
 	assert.Contains(t, view, "⚠ error")
 	assert.Contains(t, view, "✓ verified")
-	assert.Contains(t, view, "○ unsupported")
+	assert.Contains(t, view, "○ bypassed")
 	assert.NotContains(t, view, "validate command is not configured")
 	assert.NotContains(t, view, "commit must modify exactly one file")
 }

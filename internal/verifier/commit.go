@@ -19,7 +19,7 @@ type treeEntry struct {
 
 // VerifyCommit compares the immutable trees of a commit and its only parent.
 // hash must be a full hexadecimal Git object ID. Unsupported commit shapes
-// return an Unsupported result; Git and cancellation failures return an error.
+// return a Bypassed result; Git and cancellation failures return an error.
 func VerifyCommit(ctx context.Context, repo, hash string) (Result, error) {
 	if !validHashLength(hash) {
 		return Result{}, fmt.Errorf("commit hash must be a full object ID")
@@ -33,7 +33,7 @@ func VerifyCommit(ctx context.Context, repo, hash string) (Result, error) {
 	}
 	parents := commitParents(commit)
 	if len(parents) != 1 {
-		return unsupportedCommit("commit must have exactly one parent"), nil
+		return bypassedCommit("commit must have exactly one parent"), nil
 	}
 	return verifyChange(ctx, repo, parents[0], hash)
 }
@@ -58,7 +58,7 @@ func verifyChange(ctx context.Context, repo, parent, hash string) (Result, error
 	}
 	changed, reason := eligibleChange(before, after)
 	if reason != "" {
-		return unsupportedCommit(reason), nil
+		return bypassedCommit(reason), nil
 	}
 	oldBlob, err := gitOutput(ctx, repo, "cat-file", "blob", before[changed].object)
 	if err != nil {
@@ -155,7 +155,7 @@ func hasGoSibling(changed string, tree map[string]treeEntry) bool {
 	return false
 }
 
-func unsupportedCommit(reason string) Result { return Result{Status: Unsupported, Reason: reason} }
+func bypassedCommit(reason string) Result { return Result{Status: Bypassed, Reason: reason} }
 
 func readTree(ctx context.Context, repo, revision string) (map[string]treeEntry, error) {
 	out, err := gitOutput(ctx, repo, "ls-tree", "-r", "-z", "--full-tree", revision)

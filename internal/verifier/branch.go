@@ -34,7 +34,7 @@ type BranchResult struct {
 }
 
 // VerifyBranch analyzes uncached commits and persists results, including
-// unsupported results. Recorded transient errors are retried on the next run.
+// bypassed results. Recorded transient errors are retried on the next run.
 func VerifyBranch(ctx context.Context, repoPath string) (BranchResult, error) {
 	return branch(ctx, repoPath, true)
 }
@@ -169,7 +169,10 @@ func readVerification(ctx context.Context, db *sql.DB, hash string) (*Result, st
 	}
 	var cached Result
 	if err := json.Unmarshal([]byte(raw), &cached); err != nil {
-		return nil, "", fmt.Errorf("decode verification for %s: %w", hash, err)
+		return nil, "", nil
+	}
+	if !cached.Status.valid() {
+		return nil, "", nil
 	}
 	return &cached, "", nil
 }

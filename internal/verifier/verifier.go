@@ -22,10 +22,19 @@ const (
 type Status string
 
 const (
-	Verified    Status = "verified"
-	Rejected    Status = "rejected"
-	Unsupported Status = "unsupported"
+	Verified Status = "verified"
+	Rejected Status = "rejected"
+	Bypassed Status = "bypassed"
 )
+
+func (s Status) valid() bool {
+	switch s {
+	case Verified, Rejected, Bypassed:
+		return true
+	default:
+		return false
+	}
+}
 
 // Evidence describes the scope and assumptions of a successful check.
 type Evidence struct {
@@ -71,11 +80,11 @@ type rename struct {
 func Verify(filename string, before, after []byte) Result {
 	a, err := analyze(filename, before)
 	if err != nil {
-		return Result{Status: Unsupported, Reason: "before: " + err.Error()}
+		return Result{Status: Bypassed, Reason: "before: " + err.Error()}
 	}
 	b, err := analyze(filename, after)
 	if err != nil {
-		return Result{Status: Unsupported, Reason: "after: " + err.Error()}
+		return Result{Status: Bypassed, Reason: "after: " + err.Error()}
 	}
 	change, reason := findRename(a, b)
 	if reason != "" {

@@ -11,7 +11,7 @@ import (
 // Theme encodes the Tillit design language.
 //
 // It is intentionally semantic: callers describe meaning
-// (validation passed, verification unsupported, daemon running)
+// (validation passed, verification bypassed, daemon running)
 // and the theme renders a consistent visual.
 //
 // All colors are chosen as Light/Dark pairs and selected with
@@ -51,11 +51,11 @@ type Theme struct {
 	ValidationError   lipgloss.Style
 
 	// Verification styles.
-	VerificationVerified    lipgloss.Style
-	VerificationRejected    lipgloss.Style
-	VerificationUnsupported lipgloss.Style
-	VerificationPending     lipgloss.Style
-	VerificationError       lipgloss.Style
+	VerificationVerified lipgloss.Style
+	VerificationRejected lipgloss.Style
+	VerificationBypassed lipgloss.Style
+	VerificationPending  lipgloss.Style
+	VerificationError    lipgloss.Style
 
 	// Table styles.
 	TableHeader   lipgloss.Style
@@ -77,7 +77,7 @@ type Theme struct {
 	SymError             string
 	SymVerified          string
 	SymRejected          string
-	SymUnsupported       string
+	SymBypassed          string
 	SymRunning           string
 	SymStopped           string
 	SymSelected          string
@@ -100,7 +100,7 @@ func New(colorEnabled, hasDark bool) Theme {
 		SymError:             "⚠",
 		SymVerified:          "✓",
 		SymRejected:          "✗",
-		SymUnsupported:       "○",
+		SymBypassed:          "○",
 		SymRunning:           "●",
 		SymStopped:           "○",
 		SymSelected:          "▸",
@@ -126,7 +126,7 @@ func New(colorEnabled, hasDark bool) Theme {
 		t.ValidationError = lipgloss.NewStyle()
 		t.VerificationVerified = lipgloss.NewStyle()
 		t.VerificationRejected = lipgloss.NewStyle()
-		t.VerificationUnsupported = lipgloss.NewStyle()
+		t.VerificationBypassed = lipgloss.NewStyle()
 		t.VerificationPending = lipgloss.NewStyle()
 		t.VerificationError = lipgloss.NewStyle()
 		t.TableHeader = lipgloss.NewStyle()
@@ -208,7 +208,7 @@ func New(colorEnabled, hasDark bool) Theme {
 	t.VerificationRejected = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(cDanger)
-	t.VerificationUnsupported = lipgloss.NewStyle().
+	t.VerificationBypassed = lipgloss.NewStyle().
 		Foreground(cWarning)
 	t.VerificationPending = lipgloss.NewStyle().
 		Foreground(cMuted)
@@ -356,8 +356,8 @@ func (t Theme) VerificationIcon(status string) string {
 		return t.SymVerified
 	case "rejected":
 		return t.SymRejected
-	case "unsupported":
-		return t.SymUnsupported
+	case "bypassed":
+		return t.SymBypassed
 	case "error":
 		return t.SymError
 	case "pending":
@@ -374,8 +374,8 @@ func (t Theme) VerificationStyle(status string) lipgloss.Style {
 		return t.VerificationVerified
 	case "rejected":
 		return t.VerificationRejected
-	case "unsupported":
-		return t.VerificationUnsupported
+	case "bypassed":
+		return t.VerificationBypassed
 	case "error":
 		return t.VerificationError
 	case "pending":

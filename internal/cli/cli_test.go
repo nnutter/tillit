@@ -78,7 +78,7 @@ func TestStatusReportsAutomaticBranchVerification(t *testing.T) {
 			ok := false
 			for range 100 {
 				out, err = runCLI(t, dir, "status", "--no-start")
-				if err == nil && strings.Contains(out, "verification: verified") && strings.Contains(out, "verification: unsupported: commit must modify exactly one file") {
+				if err == nil && strings.Contains(out, "verification: verified") && strings.Contains(out, "verification: bypassed: commit must modify exactly one file") {
 					ok = true
 					break
 				}

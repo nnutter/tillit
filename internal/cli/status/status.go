@@ -31,7 +31,7 @@ By default, status renders an interactive TUI (Bubble Tea + Bubbles + Lip Gloss)
 when attached to a terminal, and a plain, scriptable summary otherwise.
 Use --simple for plain output and --interactive to force the TUI.
 The design language is centralized in internal/ui/theme.go and uses
-semantic colors for every state (passed/failed/pending/running/error, verified/rejected/unsupported).
+semantic colors for every state (passed/failed/pending/running/error, verified/rejected/bypassed).
 The TUI auto-refreshes every 250ms (configurable with --interval) so that
 validation states transition pending → running → passed/failed without restart.
 Status starts the daemon automatically if it is not already running;

@@ -726,7 +726,7 @@ func countValidation(outcomes []auditor.BranchOutcome) (passed, failed, pending,
 	return
 }
 
-func countVerification(outcomes []verifier.BranchOutcome) (verified, rejected, unsupported, vpending, verr int) {
+func countVerification(outcomes []verifier.BranchOutcome) (verified, rejected, bypassed, vpending, verr int) {
 	for _, o := range outcomes {
 		if o.Error != "" {
 			verr++
@@ -741,8 +741,8 @@ func countVerification(outcomes []verifier.BranchOutcome) (verified, rejected, u
 			verified++
 		case verifier.Rejected:
 			rejected++
-		case verifier.Unsupported:
-			unsupported++
+		case verifier.Bypassed:
+			bypassed++
 		default:
 			vpending++
 		}
@@ -752,17 +752,17 @@ func countVerification(outcomes []verifier.BranchOutcome) (verified, rejected, u
 
 func buildSummary(branch auditor.BranchResult, verification verifier.BranchResult, theme ui.Theme) string {
 	passed, failed, pending, running, errCount := countValidation(branch.Outcomes)
-	verified, rejected, unsupported, vpending, verr := countVerification(verification.Outcomes)
+	verified, rejected, bypassed, vpending, verr := countVerification(verification.Outcomes)
 
 	if isColorDisabled(theme) {
-		return fmt.Sprintf("Validation:   %d passed, %d failed, %d pending, %d running, %d error\nVerification: %d verified, %d rejected, %d unsupported, %d pending, %d error",
+		return fmt.Sprintf("Validation:   %d passed, %d failed, %d pending, %d running, %d error\nVerification: %d verified, %d rejected, %d bypassed, %d pending, %d error",
 			passed, failed, pending, running, errCount,
-			verified, rejected, unsupported, vpending, verr)
+			verified, rejected, bypassed, vpending, verr)
 	}
-	return buildColoredSummary(passed, failed, pending, running, errCount, verified, rejected, unsupported, vpending, verr, theme)
+	return buildColoredSummary(passed, failed, pending, running, errCount, verified, rejected, bypassed, vpending, verr, theme)
 }
 
-func buildColoredSummary(passed, failed, pending, running, errCount, verified, rejected, unsupported, vpending, verr int, theme ui.Theme) string {
+func buildColoredSummary(passed, failed, pending, running, errCount, verified, rejected, bypassed, vpending, verr int, theme ui.Theme) string {
 	label := theme.SummaryLabel
 
 	validParts := lipgloss.JoinHorizontal(lipgloss.Left,
@@ -781,7 +781,7 @@ func buildColoredSummary(passed, failed, pending, running, errCount, verified, r
 		label.Render("Verification: "),
 		theme.VerificationVerified.Render(fmt.Sprintf("%d verified", verified)), ", ",
 		theme.VerificationRejected.Render(fmt.Sprintf("%d rejected", rejected)), ", ",
-		theme.VerificationUnsupported.Render(fmt.Sprintf("%d unsupported", unsupported)),
+		theme.VerificationBypassed.Render(fmt.Sprintf("%d bypassed", bypassed)),
 	)
 	verifParts = appendPendingVerif(verifParts, vpending, verr, theme, label)
 	return validParts + "\n" + verifParts

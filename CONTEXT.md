@@ -21,5 +21,5 @@ Passing tests can provide empirical confidence that a refactor preserves behavio
 Conditional formal confidence that a refactor preserves behavior because checked language-semantic conditions imply behavior preservation under stated assumptions.
 The current verifier only establishes this for a one-parent commit modifying one existing singleton, import-free Go file: an explicit local variable and its references are renamed while other tokens and bindings remain unchanged.
 It assumes local names have no runtime significance and excludes debug metadata and source position observation.
-Unsupported and rejected changes are not verified, and validation remains separate.
+Bypassed and rejected changes are not verified, and validation remains separate.
 *Avoid*: Review
