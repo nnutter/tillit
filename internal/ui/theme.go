@@ -166,16 +166,10 @@ func New(colorEnabled, hasDark bool) Theme {
 
 	t.DaemonRunning = lipgloss.NewStyle().
 		Bold(true).
-		Foreground(cSuccess).
-		Border(lipgloss.RoundedBorder(), false, true, false, false).
-		BorderForeground(cSuccess).
-		Padding(0, 1)
+		Foreground(cSuccess)
 
 	t.DaemonStopped = lipgloss.NewStyle().
-		Foreground(cMuted).
-		Border(lipgloss.RoundedBorder(), false, true, false, false).
-		BorderForeground(cMuted).
-		Padding(0, 1)
+		Foreground(cMuted)
 
 	t.SummaryLabel = lipgloss.NewStyle().
 		Foreground(cMuted)

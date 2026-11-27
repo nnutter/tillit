@@ -399,7 +399,13 @@ func (m model) View() tea.View {
 
 	// Header - semantic.
 	title := m.theme.Title.Render(" Tillit Status ")
-	b.WriteString(title)
+	daemonStr := m.theme.DaemonBadge(m.daemonRunning)
+	if m.theme.ColorEnabled {
+		daemonStr = fmt.Sprintf("Daemon %s", daemonStr)
+	} else {
+		daemonStr = fmt.Sprintf("daemon: %s", daemonStr)
+	}
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, title, "   ", daemonStr))
 	b.WriteString("\n")
 
 	if len(m.branch.Snapshot.Branch) > 0 {
@@ -412,19 +418,7 @@ func (m model) View() tea.View {
 		b.WriteString("\n")
 	}
 
-	// Daemon + summary inline.
-	daemonStr := m.theme.DaemonBadge(m.daemonRunning)
-	if m.theme.ColorEnabled {
-		daemonStr = fmt.Sprintf("Daemon %s", daemonStr)
-	} else {
-		daemonStr = fmt.Sprintf("daemon: %s", daemonStr)
-	}
-	summary := buildSummary(m.branch, m.verification, m.theme)
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left,
-		daemonStr,
-		"   ",
-		summary,
-	))
+	b.WriteString(buildSummary(m.branch, m.verification, m.theme))
 	b.WriteString("\n")
 
 	// Refresh indicator - shows periodic polling is active.
@@ -743,7 +737,7 @@ func buildSummary(branch auditor.BranchResult, verification verifier.BranchResul
 	verified, rejected, unsupported, vpending, verr := countVerification(verification.Outcomes)
 
 	if isColorDisabled(theme) {
-		return fmt.Sprintf("Validation: %d passed, %d failed, %d pending, %d running, %d error  •  Verification: %d verified, %d rejected, %d unsupported, %d pending, %d error",
+		return fmt.Sprintf("Validation:   %d passed, %d failed, %d pending, %d running, %d error\nVerification: %d verified, %d rejected, %d unsupported, %d pending, %d error",
 			passed, failed, pending, running, errCount,
 			verified, rejected, unsupported, vpending, verr)
 	}
@@ -754,7 +748,7 @@ func buildColoredSummary(passed, failed, pending, running, errCount, verified, r
 	label := theme.SummaryLabel
 
 	validParts := lipgloss.JoinHorizontal(lipgloss.Left,
-		label.Render("Validation: "),
+		label.Render("Validation:   "),
 		theme.ValidationPassed.Render(fmt.Sprintf("%d passed", passed)), ", ",
 		theme.ValidationFailed.Render(fmt.Sprintf("%d failed", failed)), ", ",
 		label.Render(fmt.Sprintf("%d pending", pending)),
@@ -772,7 +766,7 @@ func buildColoredSummary(passed, failed, pending, running, errCount, verified, r
 		theme.VerificationUnsupported.Render(fmt.Sprintf("%d unsupported", unsupported)),
 	)
 	verifParts = appendPendingVerif(verifParts, vpending, verr, theme, label)
-	return lipgloss.JoinHorizontal(lipgloss.Left, validParts, "  │  ", verifParts)
+	return validParts + "\n" + verifParts
 }
 
 func appendPendingVerif(parts string, vpending, verr int, theme ui.Theme, label lipgloss.Style) string {

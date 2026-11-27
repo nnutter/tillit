@@ -116,9 +116,17 @@ func plainVerification(out verifier.BranchOutcome) string {
 func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier.BranchResult, daemonRunning bool, theme ui.Theme) error {
 	var b strings.Builder
 
-	// Title block - bordered, primary color.
+	// Title + daemon badge.
 	title := theme.Title.Render(" Tillit Status ")
-	b.WriteString(title)
+	daemonStr := theme.DaemonBadge(daemonRunning)
+	daemonLine := fmt.Sprintf("daemon: %s   %s", map[bool]string{true: "running", false: "stopped"}[daemonRunning], daemonStr)
+	if theme.ColorEnabled {
+		prefix := theme.SummaryLabel.Render("daemon:")
+		daemonLine = lipgloss.JoinHorizontal(lipgloss.Left,
+			prefix, " ", daemonStr,
+		)
+	}
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left, title, "   ", daemonLine))
 	b.WriteString("\n")
 
 	// Branch line.
@@ -132,27 +140,7 @@ func renderColor(w io.Writer, branch auditor.BranchResult, verification verifier
 		b.WriteString("\n")
 	}
 
-	// Daemon + summary.
-	daemonStr := theme.DaemonBadge(daemonRunning)
-	// Ensure legacy substring "daemon:" is still present via prefix.
-	daemonLine := fmt.Sprintf("daemon: %s   %s", map[bool]string{true: "running", false: "stopped"}[daemonRunning], daemonStr)
-	// If theme already renders badge, daemonLine will have both plain and styled. Keep both for greppability.
-	// For colored, we prefer badge display but keep plain prefix for greppability.
-	if theme.ColorEnabled {
-		// The badge already contains running/stopped, but we add plain prefix for search.
-		// Render daemonLine with muted prefix.
-		prefix := theme.SummaryLabel.Render("daemon:")
-		daemonLine = lipgloss.JoinHorizontal(lipgloss.Left,
-			prefix, " ", daemonStr,
-		)
-	}
-	summary := buildSummary(branch, verification, theme)
-	// Join daemon and summary on one line when space permits, else two lines.
-	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Left,
-		daemonLine,
-		"   ",
-		summary,
-	))
+	b.WriteString(buildSummary(branch, verification, theme))
 	b.WriteString("\n\n")
 
 	// Table for commits - bubbles/table.
