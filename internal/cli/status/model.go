@@ -411,18 +411,7 @@ func (m model) View() tea.View {
 	}
 
 	b.WriteString(buildSummary(m.branch, m.verification, m.theme))
-	b.WriteString("\n")
-
-	// Refresh indicator - shows periodic polling is active.
-	if m.repo != "" {
-		refreshLine := fmt.Sprintf("auto-refresh %s • last updated %s", m.interval, m.lastFetch.Format("15:04:05"))
-		if m.fetchErr != nil {
-			refreshLine += fmt.Sprintf(" • %v", m.fetchErr)
-		}
-		b.WriteString(m.theme.Subtitle.Render(refreshLine))
-		b.WriteString("\n")
-	}
-	b.WriteString("\n")
+	b.WriteString("\n\n")
 
 	// Table.
 	b.WriteString(m.table.View())
@@ -430,6 +419,16 @@ func (m model) View() tea.View {
 
 	// Help footer.
 	b.WriteString(m.help.View(m.keys))
+
+	// Secondary refresh metadata in footer.
+	if m.repo != "" {
+		refreshLine := fmt.Sprintf("auto-refresh %s • last updated %s", m.interval, m.lastFetch.Format("15:04:05"))
+		if m.fetchErr != nil {
+			refreshLine += fmt.Sprintf(" • %v", m.fetchErr)
+		}
+		b.WriteString("\n")
+		b.WriteString(m.theme.Help.Render(refreshLine))
+	}
 
 	// Apply document padding.
 	content := b.String()
