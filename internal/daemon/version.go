@@ -41,16 +41,46 @@ func versionFilePath(gitDir string) string {
 	return filepath.Join(gitDir, "tillit", "daemon.version")
 }
 
-func writeDaemonVersion(gitDir string) {
+func stageDaemonVersion(gitDir string) string {
 	fingerprint := currentBinaryFingerprint()
 	if fingerprint == "" {
+		return ""
+	}
+	dir := filepath.Dir(versionFilePath(gitDir))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return ""
+	}
+	file, err := os.CreateTemp(dir, "daemon.version.*")
+	if err != nil {
+		return ""
+	}
+	path := file.Name()
+	if _, err := file.WriteString(fingerprint + "\n"); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return ""
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(path)
+		return ""
+	}
+	return path
+}
+
+func publishDaemonVersion(stagedPath, gitDir string) {
+	if stagedPath == "" {
 		return
 	}
-	path := versionFilePath(gitDir)
-	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+	if err := os.Rename(stagedPath, versionFilePath(gitDir)); err != nil {
+		_ = os.Remove(stagedPath)
+	}
+}
+
+func removeStagedVersion(stagedPath string) {
+	if stagedPath == "" {
 		return
 	}
-	_ = os.WriteFile(path, []byte(fingerprint+"\n"), 0o600)
+	_ = os.Remove(stagedPath)
 }
 
 func removeDaemonVersion(gitDir string) {
