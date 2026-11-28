@@ -207,3 +207,71 @@ func TestReportBranchGroupsFixupsIntoOneStack(t *testing.T) {
 	require.Equal(t, tip, report.Outcomes[0].Hash)
 	require.Equal(t, "add a", report.Outcomes[0].Subject)
 }
+
+func TestResetFailedValidation(t *testing.T) {
+	gittest.WithSetenvEnviron(t)
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	runGit(t, dir, "init", "-b", "feature")
+	runGit(t, dir, "config", "user.name", "Test")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "commit", "--allow-empty", "-m", "base")
+	base := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+	runGit(t, dir, "update-ref", "refs/remotes/origin/main", base)
+	runGit(t, dir, "config", "branch.feature.remote", ".")
+	runGit(t, dir, "config", "branch.feature.merge", "refs/remotes/origin/main")
+
+	marker := filepath.Join(t.TempDir(), "should-pass")
+	script := filepath.Join(t.TempDir(), "check")
+	writeFile(t, script, "#!/bin/sh\n[ \"$1\" = pass ] || [ -f \""+marker+"\" ]\n")
+
+	writeConfig := func(mode string) {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"validate": map[string]any{"command": []string{"sh", script, mode}}})
+		require.NoError(t, err)
+		writeFile(t, filepath.Join(dir, ".tillit", "config.json"), string(data))
+		runGit(t, dir, "add", ".tillit/config.json")
+	}
+	writeConfig("pass")
+	runGit(t, dir, "commit", "-m", "passes")
+	passedHash := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+
+	writeConfig("flaky")
+	runGit(t, dir, "commit", "-m", "flaky")
+	failedHash := strings.TrimSpace(runGit(t, dir, "rev-parse", "HEAD"))
+
+	// Resetting before any state database exists is a safe no-op.
+	reset, err := auditor.ResetFailedValidation(t.Context(), dir, failedHash)
+	require.NoError(t, err)
+	require.False(t, reset)
+
+	result, err := auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "passed", result.Outcomes[0].State)
+	require.Equal(t, "failed", result.Outcomes[1].State)
+
+	// Resetting a passed commit must leave it passed.
+	reset, err = auditor.ResetFailedValidation(t.Context(), dir, passedHash)
+	require.NoError(t, err)
+	require.False(t, reset)
+
+	// Resetting a failed commit returns it to pending.
+	reset, err = auditor.ResetFailedValidation(t.Context(), dir, failedHash)
+	require.NoError(t, err)
+	require.True(t, reset)
+
+	report, err := auditor.ReportBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "passed", report.Outcomes[0].State)
+	require.Equal(t, "pending", report.Outcomes[1].State)
+	require.Empty(t, report.Outcomes[1].Error)
+
+	// Subsequent validation reruns the reset commit and observes the new outcome.
+	writeFile(t, marker, "ok")
+	result, err = auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "passed", result.Outcomes[0].State)
+	require.Equal(t, "passed", result.Outcomes[1].State)
+}
