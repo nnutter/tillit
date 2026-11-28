@@ -319,18 +319,6 @@ aube = { path = ".mise/locks/npm-oxfmt/0.80.0", digest = "sha256:fa6a6ae0fbf5299
 backend = "npm:oxfmt"
 specifiers = ["latest"]
 
-[[tools."npm:oxlint"]]
-version = "1.95.0"
-aube = { path = ".mise/locks/npm-oxlint/1.95.0", digest = "sha256:d6581794919eb7199e4a267423acd945fa8508c36944fa8498659ca1d1f7a8bb" }
-backend = "npm:oxlint"
-specifiers = ["latest"]
-
-[[tools."npm:typescript"]]
-version = "7.0.2"
-aube = { path = ".mise/locks/npm-typescript/7.0.2", digest = "sha256:3d06b3b23564c68cdad7815c356edb1506fab1c42bfb8c54234134fd9650ec17" }
-backend = "npm:typescript"
-specifiers = ["latest"]
-
 [[tools."packslip:nnutter/constable"]]
 version = "0.10.2"
 backend = "packslip:nnutter/constable"
