@@ -37,6 +37,10 @@ run = [{ task = "fix" }, { task = "test" }, { task = "check" }]
 description = "Check all files without writing fixes"
 run = "hk check --all"
 
+[tasks.validate]
+description = "Run checks and tests without applying fixes"
+run = [{ task = "check" }, { task = "test" }]
+
 [tasks.ci-test]
 description = "Run tests with the race detector and shuffled order"
 run = "go test -race -shuffle=on ./..."
@@ -70,7 +74,8 @@ mise run test
 mise run check
 '''
 
-[tasks.setup]
+[tasks.install]
+alias = "setup"
 description = "Install hk git hooks"
 run = "hk install --mise"
 
