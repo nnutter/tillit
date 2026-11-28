@@ -8,7 +8,7 @@ From a feature branch with commits ahead of its base:
 
 ```sh
 go install ./cmd/tillit
-tillit config set auditor.validate.command '["go","test","./..."]'
+tillit config set validate.command '["go","test","./..."]'
 tillit start
 tillit status
 tillit feedback --json

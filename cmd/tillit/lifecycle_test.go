@@ -142,7 +142,7 @@ func TestStopKillStopsValidationDescendants(t *testing.T) {
 	repo := newLifecycleRepo(t, env)
 	marker := filepath.Join(repo, "descendant.pid")
 	script := fmt.Sprintf("echo validation-output; echo $$ > %s; exec sleep 60", marker)
-	require.NoError(t, os.WriteFile(filepath.Join(repo, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c",%q]}}}`, "/bin/sh", script)), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(repo, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"validate":{"command":[%q,"-c",%q]}}`, "/bin/sh", script)), 0o644))
 	cmd := exec.CommandContext(t.Context(), "git", "commit", "-am", "sleep validation")
 	cmd.Dir, cmd.Env = repo, env
 	out, err := cmd.CombinedOutput()
@@ -212,7 +212,7 @@ func newLifecycleRepo(t *testing.T, env []string) string {
 	git("config", "branch.feature.remote", ".")
 	git("config", "branch.feature.merge", "refs/remotes/origin/main")
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, ".tillit"), 0o755))
-	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"auditor":{"validate":{"command":[%q,"-c","echo validation-output; exit 0"]}}}`, "/bin/sh")), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, ".tillit", "config.json"), []byte(fmt.Sprintf(`{"validate":{"command":[%q,"-c","echo validation-output; exit 0"]}}`, "/bin/sh")), 0o644))
 	git("add", ".tillit/config.json")
 	git("commit", "-m", "configure")
 	return dir

@@ -62,6 +62,8 @@ func acquireWorktreeLock(repoPath string) (*os.File, string, error) {
 	if err := os.MkdirAll(filepath.Dir(lockPath), 0o755); err != nil {
 		return nil, "", err
 	}
+	stagedVersion := stageDaemonVersion(gitDir)
+	defer func() { removeStagedVersion(stagedVersion) }()
 	f, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
 	if err != nil {
 		return nil, "", err
@@ -73,6 +75,8 @@ func acquireWorktreeLock(repoPath string) (*os.File, string, error) {
 		}
 		return nil, "", err
 	}
+	publishDaemonVersion(stagedVersion, gitDir)
+	stagedVersion = ""
 	_ = f.Truncate(0)
 	_, _ = f.Seek(0, 0)
 	if _, err := f.WriteString(fmt.Sprintf("%d\n", os.Getpid())); err != nil {
@@ -80,7 +84,6 @@ func acquireWorktreeLock(repoPath string) (*os.File, string, error) {
 		_ = err
 	}
 	_ = f.Sync()
-	writeDaemonVersion(gitDir)
 	return f, gitDir, nil
 }
 

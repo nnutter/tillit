@@ -38,7 +38,8 @@ validation states transition pending → running → passed/failed without resta
 Status starts the daemon automatically if it is not already running;
 use --no-start to disable auto-start (--simple and --json imply --no-start).
 In the TUI, select a commit and press <enter> to see its feedback in a pop-over
-(scroll with ↑/↓, esc/enter to close).
+(scroll with ↑/↓, esc/enter to close). Press r on a failed commit to reset its
+validation to pending for retry.
 `,
 		Args: cobra.NoArgs,
 		RunE: run,

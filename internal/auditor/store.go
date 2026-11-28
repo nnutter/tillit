@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	json "encoding/json/v2"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -115,4 +116,43 @@ func readBranchOutcome(ctx context.Context, db *sql.DB, hasEvidence bool, key st
 		return fmt.Errorf("decode validation evidence: %w", err)
 	}
 	return nil
+}
+
+func openExistingState(ctx context.Context, gitDir string) (statedb, bool, error) {
+	path := filepath.Join(gitDir, "tillit", "state.db")
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		return statedb{}, false, nil
+	} else if err != nil {
+		return statedb{}, false, err
+	}
+	db, err := openState(ctx, gitDir)
+	if err != nil {
+		return statedb{}, false, err
+	}
+	var exists int
+	err = db.QueryRowContext(ctx, `SELECT count(*) FROM sqlite_master WHERE type='table' AND name='branch_validation'`).Scan(&exists)
+	if err != nil {
+		_ = db.Close()
+		return statedb{}, false, err
+	}
+	if exists == 0 {
+		_ = db.Close()
+		return statedb{}, false, nil
+	}
+	return db, true, nil
+}
+
+func deleteFailedBranchOutcome(ctx context.Context, db *sql.DB, hash, key string) (bool, error) {
+	res, err := db.ExecContext(ctx,
+		`DELETE FROM branch_validation WHERE commit_hash = ? AND input = ? AND state = 'failed'`,
+		hash, key,
+	)
+	if err != nil {
+		return false, err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return n > 0, nil
 }

@@ -28,6 +28,7 @@ type KeyMap struct {
 	Top       key.Binding
 	Bottom    key.Binding
 	Detail    key.Binding
+	Retry     key.Binding
 	Quit      key.Binding
 	Help      key.Binding
 	ForceQuit key.Binding
@@ -36,12 +37,12 @@ type KeyMap struct {
 func (k KeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Up, k.Down, k.PageUp, k.PageDown, k.Top, k.Bottom},
-		{k.Detail, k.Help, k.Quit, k.ForceQuit},
+		{k.Detail, k.Retry, k.Help, k.Quit, k.ForceQuit},
 	}
 }
 
 func (k KeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Detail, k.Help}
+	return []key.Binding{k.Up, k.Down, k.Detail, k.Retry, k.Help}
 }
 
 func defaultKeyMap() KeyMap {
@@ -73,6 +74,10 @@ func defaultKeyMap() KeyMap {
 		Detail: key.NewBinding(
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "view feedback"),
+		),
+		Retry: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "retry"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q", "esc"),
@@ -129,6 +134,12 @@ type feedbackMsg struct {
 	hash    string
 	outcome auditor.BranchOutcome
 	err     error
+}
+
+type retryMsg struct {
+	hash  string
+	reset bool
+	err   error
 }
 
 // NewModel creates a status model.
@@ -219,6 +230,11 @@ func fetchFeedbackMsg(ctx context.Context, repo, hash string) feedbackMsg {
 		}
 	}
 	return feedbackMsg{hash: hash, err: fmt.Errorf("commit not found in feedback: %s", hash)}
+}
+
+func resetFailedMsg(ctx context.Context, repo, hash string) retryMsg {
+	reset, err := auditor.ResetFailedValidation(ctx, repo, hash)
+	return retryMsg{hash: hash, reset: reset, err: err}
 }
 
 func isNonEmpty(s string) bool { return s != "" }
@@ -378,6 +394,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return updateRefreshMsg(&m, msg)
 	case feedbackMsg:
 		return updateFeedbackMsg(&m, msg)
+	case retryMsg:
+		return updateRetryMsg(&m, msg)
 	case tea.WindowSizeMsg:
 		return updateWindowSizeMsg(&m, msg)
 	case tea.BackgroundColorMsg:
@@ -494,11 +512,7 @@ func (m model) renderDetail() string {
 		inner.WriteString(m.detailViewport.View())
 	}
 	inner.WriteString("\n")
-	footer := "gg/G top/bottom  •  ^b/^f page  •  ↑/↓ scroll  •  esc to close"
-	if !m.theme.ColorEnabled {
-		footer = "gg/G top/bottom  ^b/^f page  up/down scroll  esc to close"
-	}
-	inner.WriteString(m.theme.DetailFooter.Render(footer))
+	inner.WriteString(m.theme.DetailFooter.Render(detailFooter(outcome.State, m.theme.ColorEnabled)))
 
 	body := inner.String()
 	if m.theme.ColorEnabled {
@@ -541,6 +555,19 @@ func (m model) tableWidth() int {
 	return max(40, m.width-4)
 }
 
+func detailFooter(state string, colorEnabled bool) string {
+	sep := "  "
+	footer := "gg/G top/bottom  ^b/^f page  up/down scroll  esc to close"
+	if colorEnabled {
+		sep = "  •  "
+		footer = "gg/G top/bottom  •  ^b/^f page  •  ↑/↓ scroll  •  esc to close"
+	}
+	if state == "failed" {
+		return "r retry" + sep + footer
+	}
+	return footer
+}
+
 func updateRefreshMsg(m *model, msg refreshMsg) (tea.Model, tea.Cmd) {
 	m.fetchErr = msg.fetchErr
 	if msg.fetchErr == nil {
@@ -564,6 +591,33 @@ func updateFeedbackMsg(m *model, msg feedbackMsg) (tea.Model, tea.Cmd) {
 		m.detailViewport.SetContent(formatFeedback(msg.outcome, m.theme))
 		m.detailViewport.GotoTop()
 	}
+	return *m, nil
+}
+
+func updateRetryMsg(m *model, msg retryMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		m.fetchErr = fmt.Errorf("retry validation: %w", msg.err)
+		return *m, nil
+	}
+	if !msg.reset {
+		return *m, nil
+	}
+	for i := range m.branch.Outcomes {
+		if m.branch.Outcomes[i].Hash == msg.hash {
+			m.branch.Outcomes[i].State = "pending"
+			m.branch.Outcomes[i].Error = ""
+			m.branch.Outcomes[i].Evidence = nil
+			break
+		}
+	}
+	if m.showDetail {
+		if m.detailHash == msg.hash {
+			m.showDetail = false
+			m.detailHash = ""
+			m.pendingG = false
+		}
+	}
+	m.rebuildTableLocked()
 	return *m, nil
 }
 
@@ -621,6 +675,8 @@ func updateKeyMsg(m *model, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return *m, nil
 	case key.Matches(msg, m.keys.Detail):
 		return openDetail(m)
+	case key.Matches(msg, m.keys.Retry):
+		return retrySelected(m)
 	}
 	var cmd tea.Cmd
 	m.table, cmd = m.table.Update(msg)
@@ -642,6 +698,8 @@ func updateDetailKey(m *model, msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.detailHash = ""
 		m.pendingG = false
 		return *m, nil
+	case key.Matches(msg, m.keys.Retry):
+		return retryDetail(m)
 	}
 	// gg goes to top, G goes to bottom.
 	if msg.String() == "g" {
@@ -690,6 +748,42 @@ func openDetail(m *model) (tea.Model, tea.Cmd) {
 		},
 		nil,
 	)
+}
+
+func retrySelected(m *model) (tea.Model, tea.Cmd) {
+	if m.repo == "" {
+		return *m, nil
+	}
+	cursor := m.table.Cursor()
+	if !isCursorValid(cursor, len(m.branch.Outcomes)) {
+		return *m, nil
+	}
+	return retryOutcome(m, m.branch.Outcomes[cursor])
+}
+
+func retryDetail(m *model) (tea.Model, tea.Cmd) {
+	if m.repo == "" {
+		return *m, nil
+	}
+	for _, outcome := range m.branch.Outcomes {
+		if outcome.Hash == m.detailHash {
+			return retryOutcome(m, outcome)
+		}
+	}
+	return *m, nil
+}
+
+func retryOutcome(m *model, outcome auditor.BranchOutcome) (tea.Model, tea.Cmd) {
+	if outcome.State != "failed" {
+		return *m, nil
+	}
+	repo := m.repo
+	hash := outcome.Hash
+	return *m, func() tea.Msg {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return resetFailedMsg(ctx, repo, hash)
+	}
 }
 
 func isColorDisabled(t ui.Theme) bool { return !t.ColorEnabled }

@@ -273,7 +273,7 @@ func initRepo(t *testing.T, committed, staged []byte) string {
 
 func writeConfig(t *testing.T, dir string, command []string, mode string) {
 	t.Helper()
-	body, err := json.Marshal(validateDocument{Auditor: auditorDocument{Validate: validateSettings{Command: command, Mode: mode}}})
+	body, err := json.Marshal(validateDocument{Validate: validateSettings{Command: command, Mode: mode}})
 	require.NoError(t, err)
 	path := filepath.Join(dir, ".git", "tillit", "config.json")
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
@@ -281,10 +281,6 @@ func writeConfig(t *testing.T, dir string, command []string, mode string) {
 }
 
 type validateDocument struct {
-	Auditor auditorDocument `json:"auditor"`
-}
-
-type auditorDocument struct {
 	Validate validateSettings `json:"validate"`
 }
 

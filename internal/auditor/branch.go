@@ -49,6 +49,45 @@ func ValidateBranch(ctx context.Context, repoPath string) (BranchResult, error) 
 	return validateSnapshot(ctx, snapshot, repo, gitDir, dest, db)
 }
 
+// ResetFailedValidation clears a cached failed validation for commit hash so
+// it returns to pending and will be re-validated on the next pass.
+// It returns true if a failed validation record was cleared.
+func ResetFailedValidation(ctx context.Context, repoPath, hash string) (bool, error) {
+	repo, gitDir, err := repository.Open(repoPath)
+	if err != nil {
+		return false, err
+	}
+	defer func() { _ = repo.Close() }()
+	commit, err := repo.CommitObject(plumbing.NewHash(hash))
+	if err != nil {
+		return false, err
+	}
+	data, err := historicalConfig(commit)
+	if err != nil {
+		return false, err
+	}
+	cfg, err := config.LoadHistorical(gitDir, data)
+	if err != nil {
+		return false, err
+	}
+	if len(cfg.Command) == 0 {
+		return false, nil
+	}
+	key, err := branchConfigKey(cfg)
+	if err != nil {
+		return false, err
+	}
+	db, ok, err := openExistingState(ctx, gitDir)
+	if err != nil {
+		return false, err
+	}
+	if !ok {
+		return false, nil
+	}
+	defer func() { _ = db.Close() }()
+	return deleteFailedBranchOutcome(ctx, db.DB, commit.Hash.String(), key)
+}
+
 func openValidation(ctx context.Context, repoPath string) (commitstack.Snapshot, repoType, string, string, statedb, error) {
 	snapshot, err := repository.SnapshotStacks(ctx, repoPath)
 	if err != nil {

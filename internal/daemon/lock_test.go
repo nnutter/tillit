@@ -115,7 +115,10 @@ func TestStatusDetectsOutOfSyncDaemon(t *testing.T) {
 		if err != nil {
 			return false
 		}
-		return state.Running
+		if !state.Running {
+			return false
+		}
+		return !state.NeedsRestart
 	}, time.Second, 10*time.Millisecond)
 
 	state, err := daemon.Status(dir)
