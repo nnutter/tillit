@@ -1,6 +1,10 @@
 package status
 
 import (
+	"encoding/json/v2"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -9,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/nnutter/commitstack"
+	"github.com/nnutter/gittest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -217,4 +222,113 @@ func TestViewShowsDaemonNeedsRestart(t *testing.T) {
 
 	stale := NewModelWithRepo(branch, verification, daemon.State{Running: true, NeedsRestart: true}, ui.New(true, true), "/tmp/repo", 250*time.Millisecond)
 	assert.Contains(t, stripANSI(stale.View().Content), "● running (needs restart)")
+}
+
+func setupFailedRepo(t *testing.T) (string, auditor.BranchResult) {
+	t.Helper()
+	gittest.WithSetenvEnviron(t)
+	dir := t.TempDir()
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("GIT_CONFIG_GLOBAL", filepath.Join(dir, "missing"))
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	runGit := func(args ...string) string {
+		t.Helper()
+		cmd := exec.CommandContext(t.Context(), "git", args...)
+		cmd.Dir = dir
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, "git %v: %s", args, string(out))
+		return strings.TrimSpace(string(out))
+	}
+	runGit("init", "-b", "feature")
+	runGit("config", "user.name", "Test")
+	runGit("config", "user.email", "test@example.com")
+	runGit("commit", "--allow-empty", "-m", "base")
+	base := runGit("rev-parse", "HEAD")
+	runGit("update-ref", "refs/remotes/origin/main", base)
+	runGit("config", "branch.feature.remote", ".")
+	runGit("config", "branch.feature.merge", "refs/remotes/origin/main")
+
+	writeCfg := func(cmd []string) {
+		t.Helper()
+		data, err := json.Marshal(map[string]any{"validate": map[string]any{"command": cmd}})
+		require.NoError(t, err)
+		cfgPath := filepath.Join(dir, ".tillit", "config.json")
+		require.NoError(t, os.MkdirAll(filepath.Dir(cfgPath), 0o755))
+		require.NoError(t, os.WriteFile(cfgPath, data, 0o644))
+		runGit("add", ".tillit/config.json")
+	}
+	writeCfg([]string{"sh", "-c", "exit 0"})
+	runGit("commit", "-m", "passes")
+	writeCfg([]string{"sh", "-c", "exit 1"})
+	runGit("commit", "-m", "fails")
+
+	branch, err := auditor.ValidateBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Len(t, branch.Outcomes, 2)
+	require.Equal(t, "passed", branch.Outcomes[0].State)
+	require.Equal(t, "failed", branch.Outcomes[1].State)
+	return dir, branch
+}
+
+func TestRetryKeyResetsFailedValidationToPending(t *testing.T) {
+	dir, branch := setupFailedRepo(t)
+	verification := verifier.BranchResult{Snapshot: branch.Snapshot}
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), dir, 250*time.Millisecond)
+
+	assert.Contains(t, stripANSI(m.View().Content), "r retry")
+
+	// Pressing r on a passed commit (cursor 0) is a no-op.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	assert.Nil(t, cmd)
+	m = next.(model)
+
+	// Move to the failed commit (cursor 1) and press r.
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(model)
+	next, cmd = m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	require.NotNil(t, cmd)
+	m = next.(model)
+
+	msg := cmd()
+	next, _ = m.Update(msg)
+	m = next.(model)
+
+	view := stripANSI(m.View().Content)
+	assert.Contains(t, view, "1 passed, 0 failed, 1 pending")
+	assert.Contains(t, view, "✓ passed")
+	assert.Contains(t, view, "○ pending")
+	assert.NotContains(t, view, "✗ failed")
+
+	report, err := auditor.ReportBranch(t.Context(), dir)
+	require.NoError(t, err)
+	require.Equal(t, "passed", report.Outcomes[0].State)
+	require.Equal(t, "pending", report.Outcomes[1].State)
+}
+
+func TestRetryKeyWorksFromDetailPopover(t *testing.T) {
+	dir, branch := setupFailedRepo(t)
+	verification := verifier.BranchResult{Snapshot: branch.Snapshot}
+	m := NewModelWithRepo(branch, verification, daemon.State{Running: true}, ui.New(true, true), dir, 250*time.Millisecond)
+
+	// Select the failed commit and open the feedback detail pop-over.
+	next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	m = next.(model)
+	next, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = next.(model)
+	require.True(t, m.showDetail)
+	assert.Contains(t, stripANSI(m.View().Content), "r retry")
+
+	// Press r inside the pop-over.
+	next, cmd := m.Update(tea.KeyPressMsg{Code: 'r', Text: "r"})
+	require.NotNil(t, cmd)
+	m = next.(model)
+
+	next, _ = m.Update(cmd())
+	m = next.(model)
+
+	assert.False(t, m.showDetail)
+	view := stripANSI(m.View().Content)
+	assert.Contains(t, view, "1 passed, 0 failed, 1 pending")
+	assert.Contains(t, view, "○ pending")
+	assert.NotContains(t, view, "✗ failed")
 }
