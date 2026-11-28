@@ -10,7 +10,7 @@
 betterleaks = "latest"
 go = "latest"
 gofumpt = "latest"
-hk = "2.12.0"
+hk = "2.14.0"
 jactionlint = "latest"
 pkl = "latest"
 python = "3.14"

@@ -1,16 +1,15 @@
 // The hook templates from nnutter/hk-config, which amend hk's configuration.
 // Both package paths name the same hk-config version, and that version must
-// target the hk pin in mise.toml. v2.12.0-0 is the newest revision released
-// for hk 2.12.0.
+// target the hk pin in mise.toml.
 amends
-  "package://github.com/nnutter/hk-config/releases/download/v2.12.0-0/hk-config@2.12.0-0#/Config.pkl"
+  "package://github.com/nnutter/hk-config/releases/download/v2.14.0-0/hk-config@2.14.0-0#/Config.pkl"
 
 import
-  "package://github.com/nnutter/hk-config/releases/download/v2.12.0-0/hk-config@2.12.0-0#/Hooks.pkl"
+  "package://github.com/nnutter/hk-config/releases/download/v2.14.0-0/hk-config@2.14.0-0#/Hooks.pkl"
   as Hooks
 
 fail_fast = false
 
 exclude = List(".mise/locks")
 
-hooks = Hooks.all(List("go", "toml", "ts-backend", "yaml"))
+hooks = Hooks.all(List("go", "toml", "json", "yaml"))
