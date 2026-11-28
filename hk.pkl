@@ -12,4 +12,4 @@ fail_fast = false
 
 exclude = List(".mise/locks")
 
-hooks = Hooks.all(List("go", "toml", "json", "yaml", "agentskills"))
+hooks = Hooks.all(List("go", "toml", "json", "yaml", "agentskills", "shell"))
